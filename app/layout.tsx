@@ -12,9 +12,6 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: 'Foxgrove Road · House operations',
   description: 'Bookings, cleaning rotas and household ops for Foxgrove Road.',
-  icons: {
-    icon: '/favicon.ico',
-  },
 }
 
 export default function RootLayout({
