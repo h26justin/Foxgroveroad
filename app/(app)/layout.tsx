@@ -11,7 +11,6 @@ export default async function AuthedLayout({
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
 
-  // Admin: count pending requests so we can badge the nav item
   let pendingCount = 0
   if (profile.role === 'admin') {
     const supabase = await createClient()
@@ -34,7 +33,6 @@ export default async function AuthedLayout({
           borderColor: 'var(--color-warm)',
         }}
       >
-        {/* Wordmark */}
         <div className="px-6 pt-8 pb-6">
           <h1
             className="text-2xl leading-tight"
@@ -50,7 +48,6 @@ export default async function AuthedLayout({
           </p>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-3 space-y-1">
           <NavLink href="/dashboard" label="Dashboard" />
           <NavLink href="/bookings" label="My bookings" />
@@ -60,14 +57,13 @@ export default async function AuthedLayout({
               <div className="fg-section-label mt-6 mb-2 px-3">Admin</div>
               <NavLink
                 href="/admin/bookings"
-                label="Pending requests"
+                label="Bookings calendar"
                 badge={pendingCount > 0 ? pendingCount : undefined}
               />
             </>
           )}
         </nav>
 
-        {/* Profile footer */}
         <div
           className="px-4 py-4 border-t text-sm"
           style={{ borderColor: 'var(--color-warm)' }}
@@ -97,9 +93,8 @@ export default async function AuthedLayout({
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-8 py-10">{children}</div>
+        <div className="max-w-6xl mx-auto px-8 py-10">{children}</div>
       </main>
     </div>
   )
