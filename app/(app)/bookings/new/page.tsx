@@ -11,7 +11,6 @@ export default async function NewBookingPage({
   await requireProfile()
   const { error } = await searchParams
 
-  // Default check-in to today, check-out to tomorrow (a sensible starting state)
   const today = todayISO()
   const tomorrow = (() => {
     const d = new Date(today + 'T00:00:00')
@@ -44,6 +43,23 @@ export default async function NewBookingPage({
         >
           Pick your dates and group size. We'll confirm the bedrooms once approved.
         </p>
+      </div>
+
+      {/* Availability hint */}
+      <div
+        className="fg-card mb-6 p-4 flex items-center justify-between gap-4"
+        style={{ borderLeft: '4px solid var(--color-blue)' }}
+      >
+        <div className="text-sm" style={{ color: 'var(--color-ink)' }}>
+          💡 Not sure when others are around? Check the house calendar first.
+        </div>
+        <Link
+          href="/house"
+          className="fg-btn-ghost text-sm shrink-0"
+          style={{ color: 'var(--color-blue)' }}
+        >
+          See availability →
+        </Link>
       </div>
 
       {error && <div className="fg-msg-error mb-6">{error}</div>}
