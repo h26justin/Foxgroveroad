@@ -62,7 +62,8 @@ export default async function AssignBedsPage({
     .map((b) => b.bed_id)
     .filter(Boolean) as string[]
 
-  const requesterName = request.profiles?.full_name ?? 'Unknown'
+  const requesterName =
+    (request.profiles as any)?.full_name ?? 'Unknown'
   const totalGuests = request.adults + request.children
 
   return (
@@ -202,7 +203,7 @@ export default async function AssignBedsPage({
                               style={{ color: 'var(--color-red)' }}
                             >
                               taken by{' '}
-                              {conflict.profiles?.full_name ??
+                              {(conflict.profiles as any)?.full_name ??
                                 conflict.guest_name}{' '}
                               ({formatDateRange(
                                 conflict.check_in,

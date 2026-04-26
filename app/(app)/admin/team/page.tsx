@@ -132,7 +132,7 @@ export default async function AdminTeamPage({
                     style={{ color: 'var(--color-muted)' }}
                   >
                     {c.profile_id
-                      ? `linked to: ${c.profiles?.full_name ?? '—'}`
+                      ? `linked to: ${(c.profiles as any)?.full_name ?? '—'}`
                       : 'not linked to an account yet'}
                     {' · '}
                     {c.is_active ? 'active' : 'inactive'}

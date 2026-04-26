@@ -468,7 +468,7 @@ function BookingBar({
 
   const leftPx = visibleStart * dayWidthPx
   const widthPx = (visibleEnd - visibleStart) * dayWidthPx
-  const name = booking.profiles?.full_name ?? booking.guest_name
+  const name = (booking.profiles as any)?.full_name ?? booking.guest_name
 
   return (
     <div

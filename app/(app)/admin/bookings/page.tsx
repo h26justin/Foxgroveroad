@@ -521,7 +521,7 @@ function RequestBar({
   const leftPx = visibleStart * dayWidthPx
   const widthPx = (visibleEnd - visibleStart) * dayWidthPx
   const guestCount = request.adults + request.children
-  const requesterName = request.profiles?.full_name ?? 'Unknown'
+  const requesterName = (request.profiles as any)?.full_name ?? 'Unknown'
   const bg = color === 'amber' ? 'var(--color-amber)' : 'var(--color-green)'
 
   const inner = (
@@ -560,7 +560,7 @@ function BookingBar({ booking, startISO, totalDays, dayWidthPx }: any) {
 
   const leftPx = visibleStart * dayWidthPx
   const widthPx = (visibleEnd - visibleStart) * dayWidthPx
-  const name = booking.profiles?.full_name ?? booking.guest_name
+  const name = (booking.profiles as any)?.full_name ?? booking.guest_name
 
   return (
     <Link
@@ -592,7 +592,7 @@ function BookingBar({ booking, startISO, totalDays, dayWidthPx }: any) {
 // ---------- Lists ----------
 
 function NeedsAssignmentRow({ req }: any) {
-  const name = req.profiles?.full_name ?? 'Unknown'
+  const name = (req.profiles as any)?.full_name ?? 'Unknown'
   const guests = req.adults + req.children
   return (
     <div className="fg-card p-4 flex items-center justify-between gap-3">
@@ -619,7 +619,7 @@ function NeedsAssignmentRow({ req }: any) {
 }
 
 function PendingCard({ req }: any) {
-  const requesterName = req.profiles?.full_name ?? 'Unknown family member'
+  const requesterName = (req.profiles as any)?.full_name ?? 'Unknown family member'
   const isPast = req.check_out < todayISO()
 
   return (
@@ -702,7 +702,7 @@ function PendingCard({ req }: any) {
 }
 
 function DecidedRow({ req }: any) {
-  const name = req.profiles?.full_name ?? 'Unknown'
+  const name = (req.profiles as any)?.full_name ?? 'Unknown'
   return (
     <div className="fg-card px-4 py-3 flex items-center justify-between gap-3">
       <div className="min-w-0 flex-1">
