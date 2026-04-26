@@ -1,21 +1,23 @@
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 
-export type UserRole = 'admin' | 'family' | 'cleaner'
-
-export type UserProfile = {
-  id: string
-  email: string
-  full_name: string
-  role: UserRole
-  phone: string | null
+/**
+ * Returns the current Supabase auth user, or null if not signed in.
+ * Use this in server components/actions to gate access.
+ */
+export async function getCurrentUser() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
 }
 
 /**
- * Fetch the currently signed-in user with their profile row.
- * Returns null if not signed in.
+ * Returns the current user's profile row (id, full_name, role, ...) or null.
+ * Most pages should use this rather than getCurrentUser, since the role
+ * lives on the profile, not on auth.users.
  */
-export async function getCurrentUser(): Promise<UserProfile | null> {
+export async function getCurrentProfile() {
   const supabase = await createClient()
 
   const {
@@ -23,49 +25,37 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: profile, error } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
     .select('id, full_name, role, phone')
     .eq('id', user.id)
     .single()
 
-  if (error || !profile) {
-    // The trigger should have created this row, but if it hasn't, fail soft.
-    return {
-      id: user.id,
-      email: user.email ?? '',
-      full_name: user.email ?? 'Unknown',
-      role: 'family',
-      phone: null,
-    }
-  }
-
-  return {
-    id: profile.id,
-    email: user.email ?? '',
-    full_name: profile.full_name,
-    role: profile.role as UserRole,
-    phone: profile.phone,
-  }
+  return profile
 }
 
 /**
- * Same as getCurrentUser but redirects to /login if not signed in.
- * Use in protected server components.
+ * Throws + redirects to /login if not signed in. Returns the profile.
+ * Use as `const profile = await requireProfile()` at the top of any
+ * authed page — handles auth checks in one line.
  */
-export async function requireUser(): Promise<UserProfile> {
-  const user = await getCurrentUser()
-  if (!user) redirect('/login')
-  return user
+export async function requireProfile() {
+  const profile = await getCurrentProfile()
+  if (!profile) {
+    const { redirect } = await import('next/navigation')
+    redirect('/login')
+  }
+  return profile!
 }
 
 /**
- * Require a specific role. Redirects to /dashboard if the user is signed in
- * but doesn't have the required role.
+ * Convenience: throws + redirects if not an admin.
  */
-export async function requireRole(role: UserRole | UserRole[]): Promise<UserProfile> {
-  const user = await requireUser()
-  const allowed = Array.isArray(role) ? role : [role]
-  if (!allowed.includes(user.role)) redirect('/dashboard')
-  return user
+export async function requireAdmin() {
+  const profile = await requireProfile()
+  if (profile.role !== 'admin') {
+    const { redirect } = await import('next/navigation')
+    redirect('/dashboard')
+  }
+  return profile
 }
