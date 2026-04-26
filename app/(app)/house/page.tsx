@@ -42,10 +42,11 @@ export default async function HousePage({
     return d.toISOString().slice(0, 10)
   })()
 
-  // Rooms
+  // Rooms (only bedrooms — non-bedrooms aren't bookable)
   const { data: rooms } = await supabase
     .from('rooms')
     .select('id, name, floor, is_owner_room')
+    .eq('room_type', 'bedroom')
     .order('floor', { ascending: false })
     .order('name')
 

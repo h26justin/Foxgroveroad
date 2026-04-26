@@ -61,6 +61,7 @@ export default async function AuthedLayout({
                 label="Bookings calendar"
                 badge={pendingCount > 0 ? pendingCount : undefined}
               />
+              <NavLink href="/admin/rooms" label="Rooms" />
               <NavLink href="/admin/team" label="Team" />
             </>
           )}

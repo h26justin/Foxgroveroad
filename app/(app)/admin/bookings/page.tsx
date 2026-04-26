@@ -47,10 +47,12 @@ export default async function AdminBookingsPage({
     return d.toISOString().slice(0, 10)
   })()
 
-  // Rooms (for the row labels)
+  // Rooms (for the row labels) — only bedrooms; other rooms (kitchen, bathrooms, etc.)
+  // exist for the cleaning rota but aren't bookable
   const { data: rooms } = await supabase
     .from('rooms')
     .select('id, name, floor, is_owner_room')
+    .eq('room_type', 'bedroom')
     .order('floor', { ascending: false })
     .order('name')
 
@@ -563,13 +565,7 @@ function BookingBar({ booking, startISO, totalDays, dayWidthPx }: any) {
   const name = (booking.profiles as any)?.full_name ?? booking.guest_name
 
   return (
-    <Link
-      href={
-        booking.request_id
-          ? `/admin/bookings/${booking.request_id}/assign`
-          : '/admin/bookings'
-      }
-    >
+    <Link href={`/admin/bookings/${booking.id}`}>
       <div
         className="absolute rounded text-xs flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
         style={{
