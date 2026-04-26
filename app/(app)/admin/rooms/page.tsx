@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 
@@ -5,6 +6,7 @@ const FLOOR_LABELS: Record<number, string> = {
   2: 'Attic',
   1: 'First floor',
   0: 'Garden floor',
+  [-1]: 'House (global)',
 }
 
 const TYPE_META: Record<
@@ -18,6 +20,7 @@ const TYPE_META: Record<
   living: { label: 'Living', icon: '🛋', color: 'var(--color-green)' },
   utility: { label: 'Utility', icon: '🧺', color: 'var(--color-muted)' },
   common: { label: 'Common', icon: '↗', color: 'var(--color-muted)' },
+  global: { label: 'Global', icon: '🏠', color: 'var(--color-gold)' },
 }
 
 const STATUS_META: Record<
@@ -43,6 +46,17 @@ export default async function AdminRoomsPage() {
     .order('floor', { ascending: false })
     .order('name')
 
+  // Pull task counts per room in one query
+  const { data: taskRows } = await supabase
+    .from('task_templates')
+    .select('room_id')
+
+  const taskCountByRoom = new Map<string, number>()
+  for (const r of taskRows ?? []) {
+    const id = (r as any).room_id as string
+    taskCountByRoom.set(id, (taskCountByRoom.get(id) ?? 0) + 1)
+  }
+
   const byFloor = new Map<number, any[]>()
   for (const r of rooms ?? []) {
     if (!byFloor.has(r.floor)) byFloor.set(r.floor, [])
@@ -51,12 +65,12 @@ export default async function AdminRoomsPage() {
 
   const floorOrder = Array.from(byFloor.keys()).sort((a, b) => b - a)
 
-  // Stats
   const totalRooms = rooms?.length ?? 0
   const totalBedrooms =
     rooms?.filter((r) => r.room_type === 'bedroom').length ?? 0
   const totalBeds =
     rooms?.reduce((acc, r) => acc + ((r.beds as any[]) || []).length, 0) ?? 0
+  const totalTasks = taskRows?.length ?? 0
 
   return (
     <div>
@@ -73,11 +87,11 @@ export default async function AdminRoomsPage() {
         <p className="text-sm fg-mono" style={{ color: 'var(--color-muted)' }}>
           {totalRooms} room{totalRooms === 1 ? '' : 's'} ·{' '}
           {totalBedrooms} bedroom{totalBedrooms === 1 ? '' : 's'} ·{' '}
-          {totalBeds} bed{totalBeds === 1 ? '' : 's'}
+          {totalBeds} bed{totalBeds === 1 ? '' : 's'} ·{' '}
+          {totalTasks} task{totalTasks === 1 ? '' : 's'}
         </p>
       </div>
 
-      {/* Floor sections */}
       {floorOrder.map((floor) => {
         const floorRooms = byFloor.get(floor) ?? []
         return (
@@ -102,7 +116,11 @@ export default async function AdminRoomsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {floorRooms.map((room) => (
-                <RoomCard key={room.id} room={room} />
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  taskCount={taskCountByRoom.get(room.id) ?? 0}
+                />
               ))}
             </div>
           </section>
@@ -118,39 +136,45 @@ export default async function AdminRoomsPage() {
         </div>
       )}
 
-      {/* Helpful aside */}
-      <div
-        className="fg-card mt-10 p-5"
-        style={{ borderLeft: '4px solid var(--color-gold-soft)' }}
-      >
+      {totalTasks === 0 && totalRooms > 0 && (
         <div
-          className="fg-section-label mb-2"
-          style={{ color: 'var(--color-gold)' }}
+          className="fg-card mt-10 p-5"
+          style={{ borderLeft: '4px solid var(--color-amber)' }}
         >
-          What's next for rooms
+          <div
+            className="fg-section-label mb-2"
+            style={{ color: 'var(--color-amber)' }}
+          >
+            No task templates yet
+          </div>
+          <p
+            className="text-sm"
+            style={{ color: 'var(--color-ink)', lineHeight: 1.6 }}
+          >
+            Run the task-templates ingestion SQL in Supabase to load the
+            cleaning checklists captured from your old Sweepy setup.
+          </p>
         </div>
-        <p
-          className="text-sm"
-          style={{ color: 'var(--color-ink)', lineHeight: 1.6 }}
-        >
-          The rooms inventory is in place. Once Linda &amp; Sam have signed
-          up and you've shared the cleaning checklists from your old Sweepy
-          setup, we can wire up turnaround tasks (e.g. 19-step Master
-          Ensuite, 30-step Kitchen) and start the cleaner-facing today view.
-        </p>
-      </div>
+      )}
     </div>
   )
 }
 
-function RoomCard({ room }: { room: any }) {
+function RoomCard({
+  room,
+  taskCount,
+}: {
+  room: any
+  taskCount: number
+}) {
   const typeMeta = TYPE_META[room.room_type] ?? TYPE_META.common
   const status = STATUS_META[room.cleaning_status] ?? null
   const beds: any[] = (room.beds as any[]) ?? []
 
   return (
-    <div
-      className="fg-card p-4"
+    <Link
+      href={`/admin/rooms/${room.id}`}
+      className="fg-card fg-card-hover block p-4"
       style={{
         borderLeft: `3px solid ${typeMeta.color}`,
       }}
@@ -195,6 +219,13 @@ function RoomCard({ room }: { room: any }) {
           </span>
         )}
 
+        <span
+          className="text-xs fg-mono"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          · {taskCount} task{taskCount === 1 ? '' : 's'}
+        </span>
+
         {status && (
           <span
             className="text-[10px] fg-mono uppercase ml-auto"
@@ -219,6 +250,6 @@ function RoomCard({ room }: { room: any }) {
           {beds.map((b) => b.name).join(' · ')}
         </div>
       )}
-    </div>
+    </Link>
   )
 }
