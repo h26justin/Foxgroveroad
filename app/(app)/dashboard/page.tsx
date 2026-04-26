@@ -7,23 +7,56 @@ export default async function DashboardPage() {
   const profile = await requireProfile()
   const supabase = await createClient()
   const isAdmin = profile.role === 'admin'
+  const today = todayISO()
 
-  // Pending requests count (admin only)
+  // Admin counters
   let pendingCount = 0
+  let needsAssignmentCount = 0
+  let occupiedCount = 0
+
   if (isAdmin) {
-    const { count } = await supabase
+    const { count: pc } = await supabase
       .from('booking_requests')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending')
-    pendingCount = count ?? 0
+    pendingCount = pc ?? 0
+
+    // Approved requests with no bookings yet
+    const { data: approved } = await supabase
+      .from('booking_requests')
+      .select('id')
+      .eq('status', 'approved')
+      .gte('check_out', today)
+
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('request_id')
+      .eq('status', 'approved')
+      .gte('check_out', today)
+
+    const assigned = new Set(
+      (bookings ?? []).map((b) => b.request_id).filter(Boolean) as string[]
+    )
+    needsAssignmentCount = (approved ?? []).filter(
+      (r) => !assigned.has(r.id)
+    ).length
+
+    // Currently occupied beds
+    const { count: oc } = await supabase
+      .from('bookings')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'approved')
+      .lte('check_in', today)
+      .gt('check_out', today)
+    occupiedCount = oc ?? 0
   }
 
-  // My upcoming requests (anyone)
+  // My upcoming requests
   const { data: upcoming } = await supabase
     .from('booking_requests')
     .select('id, check_in, check_out, adults, children, status, notes')
     .eq('requested_by', profile.id)
-    .gte('check_out', todayISO())
+    .gte('check_out', today)
     .in('status', ['pending', 'approved'])
     .order('check_in', { ascending: true })
     .limit(5)
@@ -48,37 +81,31 @@ export default async function DashboardPage() {
         })}
       </p>
 
-      {/* Admin: pending requests alert */}
-      {isAdmin && pendingCount > 0 && (
-        <Link
-          href="/admin/bookings"
-          className="fg-card-elevated block mb-6 p-5 hover:shadow-md transition-shadow"
-          style={{
-            borderLeft: '4px solid var(--color-gold)',
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div
-                className="text-sm fg-mono mb-1"
-                style={{ color: 'var(--color-gold)' }}
-              >
-                Action needed
-              </div>
-              <div
-                className="text-lg"
-                style={{
-                  fontFamily: 'var(--font-serif)',
-                  color: 'var(--color-ink)',
-                }}
-              >
-                {pendingCount} booking request{pendingCount === 1 ? '' : 's'}{' '}
-                awaiting your review
-              </div>
-            </div>
-            <span style={{ color: 'var(--color-gold)' }}>→</span>
-          </div>
-        </Link>
+      {/* Admin quick stats */}
+      {isAdmin && (
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <StatCard
+            label="Pending review"
+            value={pendingCount}
+            color="amber"
+            href="/admin/bookings"
+            cta={pendingCount > 0 ? 'Review →' : undefined}
+          />
+          <StatCard
+            label="Need bed assignment"
+            value={needsAssignmentCount}
+            color="gold"
+            href="/admin/bookings"
+            cta={needsAssignmentCount > 0 ? 'Assign →' : undefined}
+          />
+          <StatCard
+            label="Beds occupied today"
+            value={occupiedCount}
+            color="green"
+            href="/house"
+            cta="See house →"
+          />
+        </div>
       )}
 
       {/* My upcoming stays */}
@@ -127,16 +154,9 @@ export default async function DashboardPage() {
                       {req.adults} adult{req.adults === 1 ? '' : 's'}
                       {req.children > 0 &&
                         `, ${req.children} child${req.children === 1 ? '' : 'ren'}`}
-                      {' · '}check-in {relativeFromToday(req.check_in)}
+                      {' · check-in '}
+                      {relativeFromToday(req.check_in)}
                     </div>
-                    {req.notes && (
-                      <p
-                        className="text-sm mt-2"
-                        style={{ color: 'var(--color-muted)' }}
-                      >
-                        “{req.notes}”
-                      </p>
-                    )}
                   </div>
                   <StatusPill status={req.status} />
                 </div>
@@ -155,6 +175,59 @@ export default async function DashboardPage() {
         )}
       </section>
     </div>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  color,
+  href,
+  cta,
+}: {
+  label: string
+  value: number
+  color: 'amber' | 'gold' | 'green'
+  href: string
+  cta?: string
+}) {
+  const colorVar =
+    color === 'amber'
+      ? 'var(--color-amber)'
+      : color === 'gold'
+        ? 'var(--color-gold)'
+        : 'var(--color-green)'
+
+  return (
+    <Link
+      href={href}
+      className="fg-card p-5 hover:shadow-md transition-shadow"
+      style={{ borderLeft: `4px solid ${colorVar}` }}
+    >
+      <div
+        className="text-3xl"
+        style={{
+          fontFamily: 'var(--font-serif)',
+          color: 'var(--color-ink)',
+        }}
+      >
+        {value}
+      </div>
+      <div
+        className="text-xs fg-mono uppercase mt-1"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {label}
+      </div>
+      {cta && (
+        <div
+          className="text-sm fg-mono mt-2"
+          style={{ color: colorVar, fontWeight: 500 }}
+        >
+          {cta}
+        </div>
+      )}
+    </Link>
   )
 }
 

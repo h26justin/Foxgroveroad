@@ -25,7 +25,6 @@ export default async function AuthedLayout({
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--color-cream)' }}>
-      {/* Sidebar */}
       <aside
         className="w-64 shrink-0 border-r flex flex-col"
         style={{
@@ -50,7 +49,9 @@ export default async function AuthedLayout({
 
         <nav className="flex-1 px-3 space-y-1">
           <NavLink href="/dashboard" label="Dashboard" />
+          <NavLink href="/house" label="House" />
           <NavLink href="/bookings" label="My bookings" />
+          <NavLink href="/settings" label="Settings" />
 
           {isAdmin && (
             <>
@@ -60,6 +61,7 @@ export default async function AuthedLayout({
                 label="Bookings calendar"
                 badge={pendingCount > 0 ? pendingCount : undefined}
               />
+              <NavLink href="/admin/team" label="Team" />
             </>
           )}
         </nav>

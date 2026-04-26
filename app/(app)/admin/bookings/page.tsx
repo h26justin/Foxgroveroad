@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { Fragment } from 'react'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -11,7 +10,6 @@ import {
 } from '@/lib/dates'
 import { approveRequest, declineRequest } from './actions'
 
-// How many days the timeline shows. 30 fits ~3-day-wide blocks comfortably.
 const DAYS_VISIBLE = 30
 
 export default async function AdminBookingsPage({
@@ -27,7 +25,6 @@ export default async function AdminBookingsPage({
   const supabase = await createClient()
   const { start, approved, declined } = await searchParams
 
-  // Build the visible date window
   const startISO = start || todayISO()
   const startDateObj = new Date(startISO + 'T00:00:00')
 
@@ -39,7 +36,6 @@ export default async function AdminBookingsPage({
   }
   const endISO = days[days.length - 1]
 
-  // Prev/next navigation
   const prevStart = (() => {
     const d = new Date(startDateObj)
     d.setDate(d.getDate() - DAYS_VISIBLE)
@@ -51,34 +47,92 @@ export default async function AdminBookingsPage({
     return d.toISOString().slice(0, 10)
   })()
 
-  // Fetch rooms (for the row labels)
+  // Rooms (for the row labels)
   const { data: rooms } = await supabase
     .from('rooms')
     .select('id, name, floor, is_owner_room')
     .order('floor', { ascending: false })
     .order('name')
 
-  // Fetch booking_requests overlapping the visible window
+  // Bed-level approved bookings overlapping the visible window
+  const { data: visibleBookings } = await supabase
+    .from('bookings')
+    .select(
+      'id, bed_id, check_in, check_out, request_id, guest_name, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
+    )
+    .eq('status', 'approved')
+    .lt('check_in', endISO)
+    .gt('check_out', startISO)
+    .order('check_in')
+
+  // Booking requests overlapping the window (pending + approved)
   const { data: visibleRequests } = await supabase
     .from('booking_requests')
     .select(
-      'id, check_in, check_out, adults, children, notes, status, requested_by, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      'id, check_in, check_out, adults, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
     )
     .lt('check_in', endISO)
     .gt('check_out', startISO)
     .in('status', ['pending', 'approved'])
     .order('check_in')
 
-  // Pending list (all of them, not just visible window) for the management section
+  const pendingVisible = (visibleRequests ?? []).filter(
+    (r) => r.status === 'pending'
+  )
+
+  // For each approved request, check if it has any bed bookings yet
+  const requestIdsWithBookings = new Set(
+    (visibleBookings ?? [])
+      .map((b) => b.request_id)
+      .filter(Boolean) as string[]
+  )
+  const approvedUnassigned = (visibleRequests ?? []).filter(
+    (r) => r.status === 'approved' && !requestIdsWithBookings.has(r.id)
+  )
+
+  // Group bed bookings by room for the row rendering
+  const bookingsByRoom = new Map<string, any[]>()
+  for (const b of visibleBookings ?? []) {
+    const roomId = (b.beds as any)?.room_id
+    if (!roomId) continue
+    if (!bookingsByRoom.has(roomId)) bookingsByRoom.set(roomId, [])
+    bookingsByRoom.get(roomId)!.push(b)
+  }
+
+  // Pending requests management list (all of them)
   const { data: allPending } = await supabase
     .from('booking_requests')
     .select(
-      'id, check_in, check_out, adults, children, notes, status, requested_by, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      'id, check_in, check_out, adults, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
     )
     .eq('status', 'pending')
     .order('check_in', { ascending: true })
 
-  // Recently decided (for history)
+  // Approved requests (for "needs bed assignment" list)
+  const { data: allApproved } = await supabase
+    .from('booking_requests')
+    .select(
+      'id, check_in, check_out, adults, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+    )
+    .eq('status', 'approved')
+    .gte('check_out', todayISO())
+    .order('check_in', { ascending: true })
+
+  // Find approved requests with no bed bookings yet (need assignment)
+  const { data: anyBookings } = await supabase
+    .from('bookings')
+    .select('request_id')
+    .eq('status', 'approved')
+    .gte('check_out', todayISO())
+
+  const assignedRequestIds = new Set(
+    (anyBookings ?? []).map((b) => b.request_id).filter(Boolean) as string[]
+  )
+  const needsAssignment = (allApproved ?? []).filter(
+    (r) => !assignedRequestIds.has(r.id)
+  )
+
+  // Recent decisions
   const { data: recent } = await supabase
     .from('booking_requests')
     .select(
@@ -87,13 +141,6 @@ export default async function AdminBookingsPage({
     .in('status', ['approved', 'declined'])
     .order('decided_at', { ascending: false })
     .limit(10)
-
-  const pendingVisible = (visibleRequests ?? []).filter(
-    (r) => r.status === 'pending'
-  )
-  const approvedVisible = (visibleRequests ?? []).filter(
-    (r) => r.status === 'approved'
-  )
 
   return (
     <div>
@@ -117,7 +164,6 @@ export default async function AdminBookingsPage({
       )}
       {declined && <div className="fg-msg-success mb-6">Request declined.</div>}
 
-      {/* Date range navigation */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Link
@@ -139,23 +185,30 @@ export default async function AdminBookingsPage({
             Next {DAYS_VISIBLE} days →
           </Link>
         </div>
-        <span
-          className="text-xs fg-mono"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {pendingVisible.length} pending · {approvedVisible.length} approved in
-          view
-        </span>
       </div>
 
-      {/* The calendar */}
       <Calendar
         days={days}
         rooms={rooms ?? []}
         pending={pendingVisible}
-        approved={approvedVisible}
+        approvedUnassigned={approvedUnassigned}
+        bookingsByRoom={bookingsByRoom}
         startISO={startISO}
       />
+
+      {/* Approved waiting for bed assignment */}
+      {needsAssignment.length > 0 && (
+        <section className="mt-12 mb-12">
+          <h2 className="fg-section-label mb-3">
+            Needs bed assignment ({needsAssignment.length})
+          </h2>
+          <div className="space-y-3">
+            {needsAssignment.map((r) => (
+              <NeedsAssignmentRow key={r.id} req={r} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Pending requests management */}
       <section className="mt-12 mb-12">
@@ -180,7 +233,6 @@ export default async function AdminBookingsPage({
         )}
       </section>
 
-      {/* Recent decisions */}
       {recent && recent.length > 0 && (
         <section>
           <h2 className="fg-section-label mb-3">Recently decided</h2>
@@ -201,29 +253,24 @@ function Calendar({
   days,
   rooms,
   pending,
-  approved,
+  approvedUnassigned,
+  bookingsByRoom,
   startISO,
-}: {
-  days: string[]
-  rooms: any[]
-  pending: any[]
-  approved: any[]
-  startISO: string
-}) {
+}: any) {
   const totalDays = days.length
-  const dayWidthPx = 36 // each day column
+  const dayWidthPx = 36
 
   return (
-    <div
-      className="fg-card overflow-x-auto"
-      style={{ padding: 0 }}
-    >
+    <div className="fg-card overflow-x-auto" style={{ padding: 0 }}>
       <div
         className="relative"
         style={{ minWidth: `${260 + totalDays * dayWidthPx}px` }}
       >
-        {/* Header row: dates */}
-        <div className="flex border-b" style={{ borderColor: 'var(--color-warm)' }}>
+        {/* Header */}
+        <div
+          className="flex border-b"
+          style={{ borderColor: 'var(--color-warm)' }}
+        >
           <div
             className="shrink-0 px-4 py-3 fg-section-label flex items-center"
             style={{ width: 260 }}
@@ -231,7 +278,7 @@ function Calendar({
             Date →
           </div>
           <div className="flex flex-1">
-            {days.map((iso, idx) => (
+            {days.map((iso: string, idx: number) => (
               <DayHeader
                 key={iso}
                 iso={iso}
@@ -253,30 +300,33 @@ function Calendar({
           color="amber"
         />
 
-        {/* Approved lane (not yet bed-assigned) */}
+        {/* Approved-unassigned lane */}
         <Lane
-          label={`Approved (${approved.length})`}
-          sublabel="bed assignment coming soon"
-          requests={approved}
+          label={`Approved (${approvedUnassigned.length})`}
+          sublabel="needs bed assignment"
+          requests={approvedUnassigned}
           startISO={startISO}
           totalDays={totalDays}
           dayWidthPx={dayWidthPx}
           color="green"
+          showAssignLink
         />
 
-        {/* Separator before room rows */}
         <div
           className="border-t-2"
           style={{ borderColor: 'var(--color-warm)' }}
         />
 
-        {/* Room rows (empty for now — will populate in feature #3) */}
-        {rooms.map((room) => (
+        {/* Room rows */}
+        {rooms.map((room: any) => (
           <RoomRow
             key={room.id}
             room={room}
             days={days}
             dayWidthPx={dayWidthPx}
+            bookings={bookingsByRoom.get(room.id) ?? []}
+            startISO={startISO}
+            totalDays={totalDays}
           />
         ))}
       </div>
@@ -284,15 +334,7 @@ function Calendar({
   )
 }
 
-function DayHeader({
-  iso,
-  showMonth,
-  widthPx,
-}: {
-  iso: string
-  showMonth: boolean
-  widthPx: number
-}) {
+function DayHeader({ iso, showMonth, widthPx }: any) {
   const date = new Date(iso + 'T00:00:00')
   const day = date.getDate()
   const dow = date.toLocaleDateString('en-GB', { weekday: 'short' })[0]
@@ -344,24 +386,14 @@ function Lane({
   totalDays,
   dayWidthPx,
   color,
-}: {
-  label: string
-  sublabel: string
-  requests: any[]
-  startISO: string
-  totalDays: number
-  dayWidthPx: number
-  color: 'amber' | 'green'
-}) {
+  showAssignLink = false,
+}: any) {
   return (
     <div
       className="flex border-b items-stretch"
       style={{ borderColor: 'var(--color-warm)' }}
     >
-      <div
-        className="shrink-0 px-4 py-3"
-        style={{ width: 260 }}
-      >
+      <div className="shrink-0 px-4 py-3" style={{ width: 260 }}>
         <div
           className="text-sm"
           style={{
@@ -382,7 +414,6 @@ function Lane({
         className="relative flex-1"
         style={{ minHeight: 56, width: totalDays * dayWidthPx }}
       >
-        {/* Vertical day grid lines */}
         {Array.from({ length: totalDays }).map((_, i) => (
           <div
             key={i}
@@ -395,16 +426,15 @@ function Lane({
             }}
           />
         ))}
-
-        {/* Booking bars */}
-        {requests.map((req) => (
-          <BookingBar
+        {requests.map((req: any) => (
+          <RequestBar
             key={req.id}
             request={req}
             startISO={startISO}
             totalDays={totalDays}
             dayWidthPx={dayWidthPx}
             color={color}
+            assignLink={showAssignLink}
           />
         ))}
       </div>
@@ -412,24 +442,13 @@ function Lane({
   )
 }
 
-function RoomRow({
-  room,
-  days,
-  dayWidthPx,
-}: {
-  room: any
-  days: string[]
-  dayWidthPx: number
-}) {
+function RoomRow({ room, days, dayWidthPx, bookings, startISO, totalDays }: any) {
   return (
     <div
       className="flex border-b items-stretch"
       style={{ borderColor: 'var(--color-warm)' }}
     >
-      <div
-        className="shrink-0 px-4 py-3"
-        style={{ width: 260 }}
-      >
+      <div className="shrink-0 px-4 py-3" style={{ width: 260 }}>
         <div
           className="text-sm"
           style={{
@@ -445,12 +464,12 @@ function RoomRow({
         >
           {room.is_owner_room
             ? 'owner only'
-            : `floor ${room.floor === 0 ? 'garden' : room.floor === 1 ? '1st' : 'attic'}`}
+            : `${room.floor === 0 ? 'garden' : room.floor === 1 ? '1st' : 'attic'} floor`}
         </div>
       </div>
       <div
         className="relative flex-1"
-        style={{ minHeight: 48, width: days.length * dayWidthPx }}
+        style={{ minHeight: 56, width: days.length * dayWidthPx }}
       >
         {Array.from({ length: days.length }).map((_, i) => {
           const isWeekend = (() => {
@@ -471,44 +490,43 @@ function RoomRow({
             />
           )
         })}
+        {bookings.map((b: any) => (
+          <BookingBar
+            key={b.id}
+            booking={b}
+            startISO={startISO}
+            totalDays={totalDays}
+            dayWidthPx={dayWidthPx}
+          />
+        ))}
       </div>
     </div>
   )
 }
 
-function BookingBar({
+function RequestBar({
   request,
   startISO,
   totalDays,
   dayWidthPx,
   color,
-}: {
-  request: any
-  startISO: string
-  totalDays: number
-  dayWidthPx: number
-  color: 'amber' | 'green'
-}) {
-  // Position relative to start of visible window
+  assignLink,
+}: any) {
   const startOffset = nightsBetween(startISO, request.check_in)
   const endOffset = nightsBetween(startISO, request.check_out)
-
-  // Clamp to visible
   const visibleStart = Math.max(0, startOffset)
   const visibleEnd = Math.min(totalDays, endOffset)
-
   if (visibleEnd <= visibleStart) return null
 
   const leftPx = visibleStart * dayWidthPx
   const widthPx = (visibleEnd - visibleStart) * dayWidthPx
   const guestCount = request.adults + request.children
   const requesterName = request.profiles?.full_name ?? 'Unknown'
-
   const bg = color === 'amber' ? 'var(--color-amber)' : 'var(--color-green)'
 
-  return (
+  const inner = (
     <div
-      className="absolute rounded text-xs flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow cursor-default"
+      className="absolute rounded text-xs flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow"
       style={{
         left: leftPx + 2,
         width: widthPx - 4,
@@ -517,19 +535,90 @@ function BookingBar({
         background: bg,
         color: 'white',
         fontWeight: 500,
+        cursor: assignLink ? 'pointer' : 'default',
       }}
-      title={`${requesterName} · ${formatDateRange(request.check_in, request.check_out)} · ${request.adults} adult${request.adults === 1 ? '' : 's'}${request.children > 0 ? `, ${request.children} child${request.children === 1 ? '' : 'ren'}` : ''}${request.notes ? `\nNotes: ${request.notes}` : ''}`}
+      title={`${requesterName} · ${formatDateRange(request.check_in, request.check_out)} · ${guestCount} guest${guestCount === 1 ? '' : 's'}${request.notes ? `\nNotes: ${request.notes}` : ''}${assignLink ? '\n\nClick to assign beds' : ''}`}
     >
       <span className="truncate">
         {requesterName} · {guestCount}p
       </span>
     </div>
   )
+
+  if (assignLink) {
+    return <Link href={`/admin/bookings/${request.id}/assign`}>{inner}</Link>
+  }
+  return inner
 }
 
-// ---------- Pending list management ----------
+function BookingBar({ booking, startISO, totalDays, dayWidthPx }: any) {
+  const startOffset = nightsBetween(startISO, booking.check_in)
+  const endOffset = nightsBetween(startISO, booking.check_out)
+  const visibleStart = Math.max(0, startOffset)
+  const visibleEnd = Math.min(totalDays, endOffset)
+  if (visibleEnd <= visibleStart) return null
 
-function PendingCard({ req }: { req: any }) {
+  const leftPx = visibleStart * dayWidthPx
+  const widthPx = (visibleEnd - visibleStart) * dayWidthPx
+  const name = booking.profiles?.full_name ?? booking.guest_name
+
+  return (
+    <Link
+      href={
+        booking.request_id
+          ? `/admin/bookings/${booking.request_id}/assign`
+          : '/admin/bookings'
+      }
+    >
+      <div
+        className="absolute rounded text-xs flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+        style={{
+          left: leftPx + 2,
+          width: widthPx - 4,
+          top: 8,
+          height: 40,
+          background: 'var(--color-green)',
+          color: 'white',
+          fontWeight: 500,
+        }}
+        title={`${name} · ${formatDateRange(booking.check_in, booking.check_out)}\n\nClick to manage`}
+      >
+        <span className="truncate">{name}</span>
+      </div>
+    </Link>
+  )
+}
+
+// ---------- Lists ----------
+
+function NeedsAssignmentRow({ req }: any) {
+  const name = req.profiles?.full_name ?? 'Unknown'
+  const guests = req.adults + req.children
+  return (
+    <div className="fg-card p-4 flex items-center justify-between gap-3">
+      <div>
+        <div className="text-sm" style={{ color: 'var(--color-ink)' }}>
+          {name}
+        </div>
+        <div
+          className="text-xs fg-mono mt-1"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {formatDateRange(req.check_in, req.check_out)} · {guests} guest
+          {guests === 1 ? '' : 's'}
+        </div>
+      </div>
+      <Link
+        href={`/admin/bookings/${req.id}/assign`}
+        className="fg-btn-gold text-sm"
+      >
+        Assign beds →
+      </Link>
+    </div>
+  )
+}
+
+function PendingCard({ req }: any) {
   const requesterName = req.profiles?.full_name ?? 'Unknown family member'
   const isPast = req.check_out < todayISO()
 
@@ -612,7 +701,7 @@ function PendingCard({ req }: { req: any }) {
   )
 }
 
-function DecidedRow({ req }: { req: any }) {
+function DecidedRow({ req }: any) {
   const name = req.profiles?.full_name ?? 'Unknown'
   return (
     <div className="fg-card px-4 py-3 flex items-center justify-between gap-3">
@@ -639,7 +728,7 @@ function DecidedRow({ req }: { req: any }) {
   )
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status }: any) {
   const map: Record<string, string> = {
     pending: 'fg-pill fg-pill-amber',
     approved: 'fg-pill fg-pill-green',
