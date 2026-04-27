@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useRef, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { floorLabelShort } from '@/lib/floors'
 import { moveBookingToRoomAndDates } from './actions'
 
 const DAY_WIDTH_PX = 36
@@ -554,9 +555,7 @@ function RoomRow({
           className="text-[10px] fg-mono"
           style={{ color: 'var(--color-muted)' }}
         >
-          {room.is_owner_room
-            ? 'owner only'
-            : `${room.floor === 0 ? 'garden' : room.floor === 1 ? '1st' : 'attic'} floor`}
+          {room.is_owner_room ? 'owner only' : floorLabelShort(room.floor)}
         </div>
       </div>
       <div

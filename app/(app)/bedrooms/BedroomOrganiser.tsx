@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { floorLabel } from '@/lib/floors'
 import {
   movePillToBed,
   addGuestToFirstAvailableBed,
@@ -54,12 +55,6 @@ type OverlapBooking = {
 
 type Template = { id: string; room_id: string; name: string; position: number }
 type Check = { id: string; template_id: string; room_id: string | null }
-
-const FLOOR_LABELS: Record<number, string> = {
-  2: 'Attic',
-  1: 'First floor',
-  0: 'Garden floor',
-}
 
 export default function BedroomOrganiser({
   requests,
@@ -392,12 +387,12 @@ export default function BedroomOrganiser({
               <button
                 type="button"
                 onClick={handleAddGuest}
-              className="fg-btn-gold text-xs"
-              style={{ width: 'auto', padding: '8px 14px' }}
-            >
-              + Add guest
-            </button>
-          </div>
+                className="fg-btn-gold text-xs"
+                style={{ width: 'auto', padding: '8px 14px' }}
+              >
+                + Add guest
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -411,7 +406,7 @@ export default function BedroomOrganiser({
               className="fg-section-label mb-2"
               style={{ color: 'var(--color-muted)' }}
             >
-              {FLOOR_LABELS[floor] ?? `Floor ${floor}`}
+              {floorLabel(floor)}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {floorRooms.map((room) => (

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import TaskRow from './TaskRow'
+import { floorLabel } from '@/lib/floors'
 import {
   markTaskComplete,
   undoTaskComplete,
@@ -59,14 +60,6 @@ const TYPE_META: Record<string, { icon: string }> = {
   utility:  { icon: '🧺' },
   common:   { icon: '↗' },
   global:   { icon: '🏠' },
-}
-
-function floorLabel(floor: number): string {
-  if (floor === 2) return 'Attic'
-  if (floor === 1) return 'First floor'
-  if (floor === 0) return 'Garden floor'
-  if (floor < 0) return `Lower ${Math.abs(floor)}`
-  return `Floor ${floor}`
 }
 
 // ─── Toast (local; replaces UndoToast which used URL params) ──────────

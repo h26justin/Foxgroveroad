@@ -8,6 +8,7 @@ import {
   relativeFromToday,
   todayISO,
 } from '@/lib/dates'
+import { floorLabel, PHYSICAL_FLOORS } from '@/lib/floors'
 
 const DAYS_VISIBLE = 30
 
@@ -249,11 +250,12 @@ function Calendar({
   const dayWidthPx = 36
 
   // Group rooms by floor for visual separation
-  const floors: { label: string; rooms: any[] }[] = [
-    { label: 'Attic', rooms: rooms.filter((r) => r.floor === 2) },
-    { label: 'First floor', rooms: rooms.filter((r) => r.floor === 1) },
-    { label: 'Garden floor', rooms: rooms.filter((r) => r.floor === 0) },
-  ].filter((f) => f.rooms.length > 0)
+  const floors: { label: string; rooms: any[] }[] = PHYSICAL_FLOORS
+    .map((f) => ({
+      label: floorLabel(f),
+      rooms: rooms.filter((r) => r.floor === f),
+    }))
+    .filter((f) => f.rooms.length > 0)
 
   return (
     <div className="fg-card overflow-x-auto" style={{ padding: 0 }}>

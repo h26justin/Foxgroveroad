@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { floorLabel } from '@/lib/floors'
 import { createTaskTemplate, toggleRoomCotCapacity } from './actions'
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
@@ -12,13 +13,6 @@ const TYPE_META: Record<string, { label: string; icon: string }> = {
   utility: { label: 'Utility', icon: '🧺' },
   common: { label: 'Common', icon: '↗' },
   global: { label: 'Global', icon: '🏠' },
-}
-
-const FLOOR_LABELS: Record<number, string> = {
-  2: 'Attic',
-  1: 'First floor',
-  0: 'Garden floor',
-  [-1]: 'House (global)',
 }
 
 const SCHEDULE_OPTIONS: { value: string; label: string }[] = [
@@ -130,7 +124,7 @@ export default async function AdminRoomDetailPage({
           className="text-sm fg-mono mt-2"
           style={{ color: 'var(--color-muted)' }}
         >
-          {FLOOR_LABELS[room.floor] ?? `Floor ${room.floor}`} ·{' '}
+          {floorLabel(room.floor)} ·{' '}
           {typeMeta.label} · {taskList.length} task
           {taskList.length === 1 ? '' : 's'}
           {scheduledCount > 0 &&

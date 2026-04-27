@@ -1,17 +1,11 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { floorLabel } from '@/lib/floors'
 
 // Cache for 60s — rooms + task counts don't change often. revalidatePath()
 // on the actions will bust the cache when an admin edits something.
 export const revalidate = 60
-
-const FLOOR_LABELS: Record<number, string> = {
-  2: 'Attic',
-  1: 'First floor',
-  0: 'Garden floor',
-  [-1]: 'House (global)',
-}
 
 const TYPE_META: Record<
   string,
@@ -108,7 +102,7 @@ export default async function AdminRoomsPage() {
                   color: 'var(--color-ink)',
                 }}
               >
-                {FLOOR_LABELS[floor] ?? `Floor ${floor}`}
+                {floorLabel(floor)}
               </h2>
               <span
                 className="text-xs fg-mono"
