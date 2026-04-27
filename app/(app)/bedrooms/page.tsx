@@ -62,6 +62,23 @@ export default async function BedroomsPage({
         .order('guest_name')
     : { data: [] }
 
+  // ALL approved bookings overlapping the selected request's dates,
+  // EXCLUDING those belonging to this request. Used to mark beds that are
+  // already booked by someone else for this date range — the client uses
+  // this to disable those beds as drop targets.
+  const selectedRequest = requests.find((r) => r.id === selectedRequestId)
+  const { data: overlappingRaw } = selectedRequest
+    ? await supabase
+        .from('bookings')
+        .select(
+          'id, bed_id, guest_name, check_in, check_out, request_id, profiles:profiles!bookings_requested_by_fkey(full_name)'
+        )
+        .eq('status', 'approved')
+        .lt('check_in', selectedRequest.check_out)
+        .gt('check_out', selectedRequest.check_in)
+        .neq('request_id', selectedRequestId)
+    : { data: [] }
+
   // Pre-arrival checklist templates per room
   const { data: templatesRaw } = await supabase
     .from('prearrival_templates')
@@ -133,6 +150,7 @@ export default async function BedroomsPage({
           selectedRequestId={selectedRequestId}
           rooms={(roomsRaw as any[]) ?? []}
           bookings={(bookingsRaw as any[]) ?? []}
+          overlappingBookings={(overlappingRaw as any[]) ?? []}
           templates={(templatesRaw as any[]) ?? []}
           checks={(checksRaw as any[]) ?? []}
           savedMessage={sp.saved ?? null}

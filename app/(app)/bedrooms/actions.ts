@@ -4,7 +4,32 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin, requireProfile } from '@/lib/auth'
 
-/** Move a guest pill (a `bookings` row) from its current bed to another. */
+/**
+ * Translate a raw Postgres / Supabase error message into something a
+ * non-technical user can actually act on. Covers the trigger-based
+ * overlap protection and FK violations.
+ */
+function friendlyError(message: string | undefined | null): string {
+  if (!message) return 'Something went wrong.'
+  // The DB trigger raises e.g.:
+  //   "Bed 3a84569e-... already has an approved booking overlapping these dates"
+  if (/already has an approved booking/i.test(message)) {
+    return 'That bed already has another booking on those dates.'
+  }
+  if (/violates foreign key/i.test(message)) {
+    return 'That booking or bed no longer exists.'
+  }
+  if (/duplicate key/i.test(message)) {
+    return 'That guest is already in this booking.'
+  }
+  return message
+}
+
+/**
+ * Move a guest pill (a `bookings` row) from its current bed to another.
+ * Pre-checks for conflicts so the UI gets a clean error instead of
+ * relying on the DB trigger.
+ */
 export async function movePillToBed(
   bookingId: string,
   newBedId: string
@@ -13,12 +38,45 @@ export async function movePillToBed(
   if (!bookingId || !newBedId) return { error: 'Missing ids' }
 
   const supabase = await createClient()
+
+  // Pull the booking's date range
+  const { data: booking, error: bookingErr } = await supabase
+    .from('bookings')
+    .select('id, bed_id, check_in, check_out')
+    .eq('id', bookingId)
+    .single()
+  if (bookingErr || !booking) {
+    return { error: friendlyError(bookingErr?.message ?? 'Booking not found') }
+  }
+
+  // No-op if dropping on the same bed
+  if ((booking as any).bed_id === newBedId) {
+    return { ok: true }
+  }
+
+  // Pre-flight: is the destination bed already booked for these dates?
+  const { data: conflicts } = await supabase
+    .from('bookings')
+    .select('id, guest_name')
+    .eq('bed_id', newBedId)
+    .eq('status', 'approved')
+    .lt('check_in', (booking as any).check_out)
+    .gt('check_out', (booking as any).check_in)
+    .neq('id', bookingId)
+
+  if (conflicts && conflicts.length > 0) {
+    const occupantName = (conflicts[0] as any).guest_name || 'another guest'
+    return {
+      error: `That bed is already taken by ${occupantName} on those dates.`,
+    }
+  }
+
   const { error } = await supabase
     .from('bookings')
     .update({ bed_id: newBedId })
     .eq('id', bookingId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error.message) }
 
   revalidatePath('/bedrooms')
   revalidatePath('/house')
@@ -26,9 +84,9 @@ export async function movePillToBed(
 }
 
 /**
- * Add a new guest to a booking_request. Looks for the first bed in the
- * house that doesn't already have a `bookings` row for this date range,
- * and assigns the new guest there.
+ * Add a new guest to a booking_request. Looks for the first guest bed
+ * (non-owner bedroom) without an overlapping booking, and creates a
+ * `bookings` row there.
  */
 export async function addGuestToFirstAvailableBed(
   requestId: string,
@@ -39,18 +97,13 @@ export async function addGuestToFirstAvailableBed(
 
   const supabase = await createClient()
 
-  // Pull the request for dates
   const { data: req } = await supabase
     .from('booking_requests')
     .select('id, requested_by, check_in, check_out')
     .eq('id', requestId)
     .single()
-
   if (!req) return { error: 'Booking request not found' }
 
-  // Find an available bed: a bedroom-bed in a non-owner-room with no
-  // overlapping approved booking. (Admin can still drag a pill into an
-  // owner room manually after it's been added.)
   const { data: allBeds } = await supabase
     .from('beds')
     .select('id, rooms!inner(id, is_owner_room, room_type)')
@@ -71,7 +124,7 @@ export async function addGuestToFirstAvailableBed(
   if (!freeBed) {
     return {
       error:
-        'No free guest beds for these dates. Move a pill off a bed first, or drag onto an owner room manually.',
+        'No free guest beds for these dates. Move someone off a bed first, or drag this guest into the Master Bedroom manually.',
     }
   }
 
@@ -87,14 +140,13 @@ export async function addGuestToFirstAvailableBed(
     approved_by: profile.id,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error.message) }
 
   revalidatePath('/bedrooms')
   revalidatePath('/house')
   return { ok: true }
 }
 
-/** Rename a guest pill. */
 export async function renameGuest(
   bookingId: string,
   newName: string
@@ -108,13 +160,12 @@ export async function renameGuest(
     .update({ guest_name: newName })
     .eq('id', bookingId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error.message) }
 
   revalidatePath('/bedrooms')
   return { ok: true }
 }
 
-/** Delete a guest pill (removes the bookings row entirely). */
 export async function removeGuest(
   bookingId: string
 ): Promise<{ ok?: true; error?: string }> {
@@ -122,19 +173,15 @@ export async function removeGuest(
   if (!bookingId) return { error: 'Missing booking id' }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('bookings')
-    .delete()
-    .eq('id', bookingId)
+  const { error } = await supabase.from('bookings').delete().eq('id', bookingId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: friendlyError(error.message) }
 
   revalidatePath('/bedrooms')
   revalidatePath('/house')
   return { ok: true }
 }
 
-/** Tick or untick a pre-arrival checklist item for a booking-room combo. */
 export async function togglePrearrivalCheck(
   requestId: string,
   templateId: string,
@@ -150,8 +197,6 @@ export async function togglePrearrivalCheck(
   const supabase = await createClient()
 
   if (shouldCheck) {
-    // upsert: insert if not exists. The unique(booking_request_id, template_id)
-    // constraint prevents duplicates.
     const { error } = await supabase
       .from('prearrival_checks')
       .upsert(
@@ -163,14 +208,14 @@ export async function togglePrearrivalCheck(
         },
         { onConflict: 'booking_request_id,template_id' }
       )
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyError(error.message) }
   } else {
     const { error } = await supabase
       .from('prearrival_checks')
       .delete()
       .eq('booking_request_id', requestId)
       .eq('template_id', templateId)
-    if (error) return { error: error.message }
+    if (error) return { error: friendlyError(error.message) }
   }
 
   revalidatePath('/bedrooms')

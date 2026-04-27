@@ -735,6 +735,33 @@ button, a, label, input[type="checkbox"] {
   border-color: var(--color-gold);
   border-style: solid;
 }
+.fg-bed-slot.is-blocked {
+  background: rgba(204, 51, 51, 0.05);
+  border-color: rgba(204, 51, 51, 0.2);
+  border-style: solid;
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.fg-bed-slot.is-blocked .fg-bed-empty {
+  color: var(--color-red);
+  opacity: 0.65;
+}
+.fg-bed-blocked-tag {
+  margin-left: auto;
+  background: rgba(204, 51, 51, 0.13);
+  color: var(--color-red);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .fg-bed-label {
   font-family: var(--font-mono);
   font-size: 10px;

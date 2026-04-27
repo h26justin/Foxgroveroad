@@ -33,6 +33,16 @@ type Booking = {
   request_id: string
 }
 
+type OverlapBooking = {
+  id: string
+  bed_id: string
+  guest_name: string | null
+  check_in: string
+  check_out: string
+  request_id: string | null
+  profiles: { full_name: string } | null
+}
+
 type Template = { id: string; room_id: string; name: string; position: number }
 type Check = { id: string; template_id: string; room_id: string | null }
 
@@ -47,6 +57,7 @@ export default function BedroomOrganiser({
   selectedRequestId,
   rooms,
   bookings,
+  overlappingBookings,
   templates,
   checks,
   savedMessage,
@@ -56,6 +67,7 @@ export default function BedroomOrganiser({
   selectedRequestId: string | null
   rooms: Room[]
   bookings: Booking[]
+  overlappingBookings: OverlapBooking[]
   templates: Template[]
   checks: Check[]
   savedMessage: string | null
@@ -63,6 +75,27 @@ export default function BedroomOrganiser({
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
+
+  // Local error banner for drop-rejection messages. Self-dismisses so
+  // we don't spam the URL with `?error=...` for transient feedback.
+  const [localError, setLocalError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!localError) return
+    const t = setTimeout(() => setLocalError(null), 5000)
+    return () => clearTimeout(t)
+  }, [localError])
+
+  // Map every bed_id that's already occupied by ANOTHER booking on these
+  // dates to the occupant's display name. Beds in this map become blocked
+  // drop targets.
+  const blockedBedOccupant = new Map<string, string>()
+  for (const o of overlappingBookings) {
+    if (!o.bed_id) continue
+    const name = o.guest_name || o.profiles?.full_name || 'Another guest'
+    if (!blockedBedOccupant.has(o.bed_id)) {
+      blockedBedOccupant.set(o.bed_id, name)
+    }
+  }
 
   // ─── Drag-and-drop state ─────────────────────────────────────────────
   const [drag, setDrag] = useState<{
@@ -94,7 +127,16 @@ export default function BedroomOrganiser({
     // Find the bed under the pointer (skip our own ghost via pointer-events:none)
     const el = document.elementFromPoint(e.clientX, e.clientY)
     const bedEl = el?.closest('[data-bed-id]') as HTMLElement | null
-    setHoveredBedId(bedEl?.dataset.bedId ?? null)
+    const bedId = bedEl?.dataset.bedId ?? null
+
+    // If the bed is blocked (occupied by another guest on these dates),
+    // don't show the drop-zone highlight — visually communicate that the
+    // drop won't be accepted.
+    if (bedId && blockedBedOccupant.has(bedId)) {
+      setHoveredBedId(null)
+    } else {
+      setHoveredBedId(bedId)
+    }
   }
 
   function handlePointerUp(e: React.PointerEvent) {
@@ -120,15 +162,21 @@ export default function BedroomOrganiser({
     const booking = bookings.find((b) => b.id === droppedBookingId)
     if (!booking || booking.bed_id === droppedBedId) return
 
+    // Belt-and-braces: if the bed somehow ended up blocked between
+    // hover and drop (shouldn't happen because handlePointerMove ignores
+    // blocked beds), bail out cleanly.
+    if (blockedBedOccupant.has(droppedBedId)) {
+      setLocalError(
+        `That bed is already taken by ${blockedBedOccupant.get(droppedBedId)} on these dates.`
+      )
+      return
+    }
+
     // Server move
     startTransition(async () => {
       const result = await movePillToBed(droppedBookingId, droppedBedId)
       if (result?.error) {
-        router.push(
-          `/bedrooms?request=${selectedRequestId}&error=${encodeURIComponent(
-            result.error
-          )}`
-        )
+        setLocalError(result.error)
         return
       }
       router.refresh()
@@ -198,11 +246,7 @@ export default function BedroomOrganiser({
         name.trim()
       )
       if (result?.error) {
-        router.push(
-          `/bedrooms?request=${selectedRequestId}&error=${encodeURIComponent(
-            result.error
-          )}`
-        )
+        setLocalError(result.error)
         return
       }
       router.refresh()
@@ -216,11 +260,7 @@ export default function BedroomOrganiser({
     startTransition(async () => {
       const result = await renameGuest(bookingId, name.trim())
       if (result?.error) {
-        router.push(
-          `/bedrooms?request=${selectedRequestId}&error=${encodeURIComponent(
-            result.error
-          )}`
-        )
+        setLocalError(result.error)
         return
       }
       router.refresh()
@@ -232,11 +272,7 @@ export default function BedroomOrganiser({
     startTransition(async () => {
       const result = await removeGuest(bookingId)
       if (result?.error) {
-        router.push(
-          `/bedrooms?request=${selectedRequestId}&error=${encodeURIComponent(
-            result.error
-          )}`
-        )
+        setLocalError(result.error)
         return
       }
       router.refresh()
@@ -257,15 +293,12 @@ export default function BedroomOrganiser({
         !isChecked
       )
       if (result?.error) {
-        router.push(
-          `/bedrooms?request=${selectedRequestId}&error=${encodeURIComponent(
-            result.error
-          )}`
-        )
+        setLocalError(result.error)
         return
       }
       router.refresh()
     })
+  }
   }
 
   // Lock body scroll while dragging on iOS
@@ -283,6 +316,7 @@ export default function BedroomOrganiser({
     <div>
       {savedMessage && <div className="fg-msg-success mb-4">{savedMessage}</div>}
       {errorMessage && <div className="fg-msg-error mb-4">{errorMessage}</div>}
+      {localError && <div className="fg-msg-error mb-4">{localError}</div>}
 
       {/* ─── Request picker ─── */}
       <div className="fg-card p-4 mb-5">
@@ -338,6 +372,7 @@ export default function BedroomOrganiser({
                   key={room.id}
                   room={room}
                   bookingsByBed={bookingsByBed}
+                  blockedBedOccupant={blockedBedOccupant}
                   hoveredBedId={hoveredBedId}
                   onPointerDownPill={handlePointerDown}
                   onPointerMovePill={handlePointerMove}
@@ -374,6 +409,7 @@ export default function BedroomOrganiser({
 function RoomCard({
   room,
   bookingsByBed,
+  blockedBedOccupant,
   hoveredBedId,
   onPointerDownPill,
   onPointerMovePill,
@@ -389,6 +425,7 @@ function RoomCard({
 }: {
   room: Room
   bookingsByBed: Map<string, Booking[]>
+  blockedBedOccupant: Map<string, string>
   hoveredBedId: string | null
   onPointerDownPill: (e: React.PointerEvent, bookingId: string, name: string) => void
   onPointerMovePill: (e: React.PointerEvent) => void
@@ -407,12 +444,29 @@ function RoomCard({
   ).length
   const ready = templates.length > 0 && checkedCount === templates.length
 
+  // Are ALL beds in this room blocked by other bookings? Then the whole
+  // room is "fully booked elsewhere" — useful header info.
+  const totalBeds = room.beds.length
+  const blockedBeds = room.beds.filter((b) => blockedBedOccupant.has(b.id))
+  const allBlocked = totalBeds > 0 && blockedBeds.length === totalBeds
+
   return (
     <div className="fg-bedroom-card">
       <div className="fg-bedroom-header">
         <span style={{ fontSize: 18 }}>🛏</span>
         <span className="fg-bedroom-name">{room.name}</span>
-        {isOccupied && templates.length > 0 && (
+        {allBlocked && (
+          <span
+            className="fg-room-badge"
+            style={{
+              background: 'rgba(204, 51, 51, 0.13)',
+              color: 'var(--color-red)',
+            }}
+          >
+            booked
+          </span>
+        )}
+        {!allBlocked && isOccupied && templates.length > 0 && (
           <span
             className={`fg-room-badge ${
               ready ? 'fg-room-badge-done' : 'fg-room-badge-due'
@@ -435,17 +489,29 @@ function RoomCard({
           {room.beds.map((bed) => {
             const pills = bookingsByBed.get(bed.id) ?? []
             const isHovered = hoveredBedId === bed.id
+            const blockedBy = blockedBedOccupant.get(bed.id) ?? null
+            const isBlocked = blockedBy !== null
             return (
               <div
                 key={bed.id}
                 data-bed-id={bed.id}
-                className={`fg-bed-slot${
-                  isHovered ? ' is-hovered' : ''
-                }${isDragging ? ' is-dropzone' : ''}`}
+                className={[
+                  'fg-bed-slot',
+                  isHovered ? 'is-hovered' : '',
+                  isDragging && !isBlocked ? 'is-dropzone' : '',
+                  isBlocked ? 'is-blocked' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 <div className="fg-bed-label">
                   {bed.name}
                   <span className="fg-bed-type">{bed.bed_type}</span>
+                  {isBlocked && (
+                    <span className="fg-bed-blocked-tag" title={`${blockedBy} is staying here on these dates`}>
+                      {blockedBy}
+                    </span>
+                  )}
                 </div>
                 <div className="fg-pill-stack">
                   {pills.map((p) => (
@@ -461,8 +527,13 @@ function RoomCard({
                       onRemove={onPillRemove}
                     />
                   ))}
-                  {pills.length === 0 && (
+                  {pills.length === 0 && !isBlocked && (
                     <span className="fg-bed-empty">empty</span>
+                  )}
+                  {pills.length === 0 && isBlocked && (
+                    <span className="fg-bed-empty" style={{ fontStyle: 'italic' }}>
+                      booked by another guest
+                    </span>
                   )}
                 </div>
               </div>
