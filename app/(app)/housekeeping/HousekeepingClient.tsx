@@ -183,6 +183,56 @@ export default function HousekeepingClient({
     return candidates
   }, [rooms, dueByRoom, completionsByRoom, activeRoomId, sortMode])
 
+  // ─── Most-to-do sort: SNAPSHOT not live ─────────────────────────────
+  // Sorting "by most due" needs to be stable while you tick tasks off,
+  // otherwise rooms jump around mid-clean. We capture a snapshot of the
+  // ranking at the moment the user enters most_due mode (or refreshes
+  // their snapshot via the "Re-sort" button), and use that frozen order
+  // for layout. Live counts only feed the badges, not the sort.
+  const buildSnapshot = (): Map<string, number> => {
+    // Compute the "most due" ranking right now. Each room gets an integer
+    // position, lower = higher in the list.
+    const ranked = [...rooms].sort((a, b) => {
+      const da = dueByRoom.get(a.id)?.length ?? 0
+      const db = dueByRoom.get(b.id)?.length ?? 0
+      if (db !== da) return db - da
+      return a.name.localeCompare(b.name)
+    })
+    const m = new Map<string, number>()
+    ranked.forEach((r, i) => m.set(r.id, i))
+    return m
+  }
+
+  const [mostDueSnapshot, setMostDueSnapshot] = useState<Map<string, number>>(
+    () => buildSnapshot()
+  )
+
+  // If the user is in custom mode and switches to most_due, rebuild the
+  // snapshot. We don't want to rebuild while *staying* in most_due,
+  // because that's the whole point — keep it frozen.
+  // (Custom mode → most_due triggers a fresh snapshot via switchToMostDue.)
+
+  // Stale detection: compare live ranking to snapshot. If they differ,
+  // show the user a "Re-sort" affordance.
+  const snapshotStale = useMemo(() => {
+    if (sortMode !== 'most_due') return false
+    // Build a quick live-ranking lookup
+    const live = buildSnapshot()
+    // If any room's snapshot position differs from its live position,
+    // the snapshot is stale.
+    for (const [rid, livePos] of live.entries()) {
+      const snapPos = mostDueSnapshot.get(rid)
+      if (snapPos === undefined) return true
+      if (snapPos !== livePos) return true
+    }
+    return false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortMode, dueByRoom, rooms, mostDueSnapshot])
+
+  const resortNow = () => {
+    setMostDueSnapshot(buildSnapshot())
+  }
+
   // ─── Group visible rooms by floor ─────────────────────────────────────
   // Floors are always grouped, regardless of sort mode. Within a floor
   // the order is determined by sortMode.
@@ -196,10 +246,11 @@ export default function HousekeepingClient({
     // Sort the rooms inside each floor according to sortMode
     for (const [floor, list] of m.entries()) {
       if (sortMode === 'most_due') {
+        // Use the FROZEN snapshot, not the live count.
         list.sort((a, b) => {
-          const da = dueByRoom.get(a.id)?.length ?? 0
-          const db = dueByRoom.get(b.id)?.length ?? 0
-          if (db !== da) return db - da
+          const pa = mostDueSnapshot.get(a.id) ?? Number.MAX_SAFE_INTEGER
+          const pb = mostDueSnapshot.get(b.id) ?? Number.MAX_SAFE_INTEGER
+          if (pa !== pb) return pa - pb
           return a.name.localeCompare(b.name)
         })
       } else {
@@ -219,7 +270,7 @@ export default function HousekeepingClient({
       m.set(floor, list)
     }
     return m
-  }, [visibleRooms, sortMode, dueByRoom, customOrder])
+  }, [visibleRooms, sortMode, mostDueSnapshot, customOrder])
 
   const orderedFloors = useMemo(
     () => Array.from(roomsByFloor.keys()).sort((a, b) => b - a),
@@ -365,6 +416,8 @@ export default function HousekeepingClient({
     }
   }
   const switchToMostDue = () => {
+    // Rebuild snapshot so we order by current counts at the moment of switch.
+    setMostDueSnapshot(buildSnapshot())
     setSortMode('most_due')
   }
   const resetCustom = () => {
@@ -375,6 +428,7 @@ export default function HousekeepingClient({
     )
       return
     setCustomOrder([])
+    setMostDueSnapshot(buildSnapshot())
     setSortMode('most_due')
     startSaveTransition(async () => {
       await saveRoomOrder([])
@@ -580,6 +634,20 @@ export default function HousekeepingClient({
         >
           ⋮⋮ Custom
         </button>
+        {sortMode === 'most_due' && snapshotStale && (
+          <button
+            type="button"
+            onClick={resortNow}
+            className="fg-chip"
+            style={{
+              color: 'var(--color-gold)',
+              borderColor: 'rgba(168, 134, 46, 0.4)',
+            }}
+            title="Re-rank rooms by current due counts"
+          >
+            ↻ Re-sort
+          </button>
+        )}
         {sortMode === 'custom' && customOrder.length > 0 && (
           <button
             type="button"
