@@ -93,8 +93,15 @@ export default function BookingsCalendar({
     originalRoomId: string
     grabDateOffset: number  // how many days into the booking the user grabbed
     durationDays: number
+    // Cursor position (in client coords) — used when no valid drop target,
+    // so the ghost still follows the pointer rather than disappearing.
     x: number
     y: number
+    // Snapped position (in client coords) — set when the cursor is over a
+    // valid drop cell. The ghost renders here instead of at x/y, so it
+    // visually aligns with where the booking will actually land.
+    snappedX: number | null
+    snappedY: number | null
   } | null>(null)
   const [hoverCell, setHoverCell] = useState<{ roomId: string; date: string } | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
@@ -131,13 +138,14 @@ export default function BookingsCalendar({
       durationDays,
       x: e.clientX,
       y: e.clientY,
+      snappedX: null,
+      snappedY: null,
     })
   }
 
   function handlePointerMove(e: React.PointerEvent) {
     if (!drag) return
     e.preventDefault()
-    setDrag((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : prev))
 
     // While dragging, the booking bar sits on top of the cells, so the
     // top-most element at the pointer is the bar itself. We use
@@ -150,14 +158,45 @@ export default function BookingsCalendar({
         break
       }
     }
-    if (foundCell?.dataset.roomId && foundCell?.dataset.date) {
-      setHoverCell({
-        roomId: foundCell.dataset.roomId,
-        date: foundCell.dataset.date,
-      })
-    } else {
-      setHoverCell(null)
+    const newHoverCell =
+      foundCell?.dataset.roomId && foundCell?.dataset.date
+        ? { roomId: foundCell.dataset.roomId, date: foundCell.dataset.date }
+        : null
+    setHoverCell(newHoverCell)
+
+    // Compute snapped ghost position. If the cursor is over a valid
+    // cell, we put the ghost where the booking would actually land —
+    // at the same X as the dotted preview bar. Otherwise the ghost
+    // follows the cursor so it doesn't disappear off-screen.
+    let snappedX: number | null = null
+    let snappedY: number | null = null
+    if (newHoverCell) {
+      const rowEl = document.querySelector<HTMLElement>(
+        `[data-room-row-id="${CSS.escape(newHoverCell.roomId)}"]`
+      )
+      if (rowEl) {
+        // The preview's start date in the calendar:
+        // grabDateOffset is days from startISO of the cell the user grabbed.
+        // The original check-in is at nightsBetween(startISO, originalCheckIn).
+        // The offset within the booking (how many days into it we grabbed)
+        // is grabDateOffset - originalCheckInOffset. The preview's start
+        // date is the hovered date minus that offset.
+        const originalCheckInOffset = nightsBetween(startISO, drag.originalCheckIn)
+        const grabOffsetWithinBooking = drag.grabDateOffset - originalCheckInOffset
+        const hoveredDateOffset = nightsBetween(startISO, newHoverCell.date)
+        const previewStartOffset = hoveredDateOffset - grabOffsetWithinBooking
+
+        const rowRect = rowEl.getBoundingClientRect()
+        // Match BookingBar's "left + 2, top: 8" inset so the ghost overlays
+        // the dotted preview pixel-for-pixel.
+        snappedX = rowRect.left + previewStartOffset * DAY_WIDTH_PX + 2
+        snappedY = rowRect.top + 8
+      }
     }
+
+    setDrag((prev) =>
+      prev ? { ...prev, x: e.clientX, y: e.clientY, snappedX, snappedY } : prev
+    )
   }
 
   function handlePointerUp(e: React.PointerEvent) {
@@ -327,11 +366,23 @@ export default function BookingsCalendar({
         </div>
       </div>
 
-      {/* Drag ghost */}
+      {/* Drag ghost — snaps to where the booking will land when over a
+          valid cell, otherwise follows the cursor. */}
       {drag && (
         <div
           className="fg-booking-ghost"
-          style={{ left: drag.x, top: drag.y }}
+          style={
+            drag.snappedX !== null && drag.snappedY !== null
+              ? {
+                  left: drag.snappedX,
+                  top: drag.snappedY,
+                  width: drag.durationDays * DAY_WIDTH_PX - 4,
+                  height: 40,
+                  transform: 'none',
+                  opacity: 0.95,
+                }
+              : { left: drag.x, top: drag.y }
+          }
           aria-hidden
         >
           {drag.name}
@@ -560,6 +611,7 @@ function RoomRow({
       </div>
       <div
         className="relative flex-1"
+        data-room-row-id={room.id}
         style={{ minHeight: 56, width: totalDays * DAY_WIDTH_PX }}
       >
         {days.map((iso, i) => {
@@ -567,7 +619,6 @@ function RoomRow({
             const d = new Date(iso + 'T00:00:00')
             return d.getDay() === 0 || d.getDay() === 6
           })()
-          const isHovered = hoverCellRoomId === room.id && hoverCellDate === iso
           return (
             <div
               key={i}
@@ -580,11 +631,7 @@ function RoomRow({
                 width: DAY_WIDTH_PX,
                 borderColor: 'var(--color-warm)',
                 opacity: 0.5,
-                background: isHovered
-                  ? 'rgba(168, 134, 46, 0.15)'
-                  : isWeekend
-                  ? 'var(--color-cream)'
-                  : 'transparent',
+                background: isWeekend ? 'var(--color-cream)' : 'transparent',
               }}
             />
           )
