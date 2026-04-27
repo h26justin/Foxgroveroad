@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 
+// Cache for 60s — rooms + task counts don't change often. revalidatePath()
+// on the actions will bust the cache when an admin edits something.
+export const revalidate = 60
+
 const FLOOR_LABELS: Record<number, string> = {
   2: 'Attic',
   1: 'First floor',

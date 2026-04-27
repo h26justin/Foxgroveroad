@@ -3,18 +3,15 @@ import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createTaskTemplate } from './actions'
 
-const TYPE_META: Record<
-  string,
-  { label: string; icon: string; color: string }
-> = {
-  bedroom: { label: 'Bedroom', icon: '🛏', color: 'var(--color-blue)' },
-  bathroom: { label: 'Bathroom', icon: '🛁', color: 'var(--color-blue)' },
-  kitchen: { label: 'Kitchen', icon: '🍳', color: 'var(--color-amber)' },
-  dining: { label: 'Dining', icon: '🍽', color: 'var(--color-amber)' },
-  living: { label: 'Living', icon: '🛋', color: 'var(--color-green)' },
-  utility: { label: 'Utility', icon: '🧺', color: 'var(--color-muted)' },
-  common: { label: 'Common', icon: '↗', color: 'var(--color-muted)' },
-  global: { label: 'Global', icon: '🏠', color: 'var(--color-gold)' },
+const TYPE_META: Record<string, { label: string; icon: string }> = {
+  bedroom: { label: 'Bedroom', icon: '🛏' },
+  bathroom: { label: 'Bathroom', icon: '🛁' },
+  kitchen: { label: 'Kitchen', icon: '🍳' },
+  dining: { label: 'Dining', icon: '🍽' },
+  living: { label: 'Living', icon: '🛋' },
+  utility: { label: 'Utility', icon: '🧺' },
+  common: { label: 'Common', icon: '↗' },
+  global: { label: 'Global', icon: '🏠' },
 }
 
 const FLOOR_LABELS: Record<number, string> = {
@@ -24,10 +21,24 @@ const FLOOR_LABELS: Record<number, string> = {
   [-1]: 'House (global)',
 }
 
-/**
- * Pretty-print a frequency_days int as "Every N day(s)/week(s)/month(s)".
- * Picks the largest unit that gives a clean whole number.
- */
+const SCHEDULE_OPTIONS: { value: string; label: string }[] = [
+  { value: '1',           label: 'Every day' },
+  { value: '2',           label: 'Every 2 days' },
+  { value: '3',           label: 'Every 3 days' },
+  { value: '5',           label: 'Every 5 days' },
+  { value: '7',           label: 'Every week' },
+  { value: '14',          label: 'Every 2 weeks' },
+  { value: '21',          label: 'Every 3 weeks' },
+  { value: '30',          label: 'Every month' },
+  { value: '60',          label: 'Every 2 months' },
+  { value: '90',          label: 'Every 3 months' },
+  { value: '120',         label: 'Every 4 months' },
+  { value: '150',         label: 'Every 5 months' },
+  { value: '180',         label: 'Every 6 months' },
+  { value: '365',         label: 'Every year' },
+  { value: 'turnaround',  label: 'On turnaround (between guests)' },
+]
+
 function formatFrequency(days: number | null, isTurnaround: boolean) {
   if (isTurnaround) return 'On turnaround'
   if (days == null) return 'Not scheduled'
@@ -106,7 +117,7 @@ export default async function AdminRoomDetailPage({
         <div className="flex items-baseline gap-3 flex-wrap">
           <span style={{ fontSize: 28 }}>{typeMeta.icon}</span>
           <h1
-            className="text-3xl"
+            className="text-2xl md:text-3xl"
             style={{
               fontFamily: 'var(--font-serif)',
               color: 'var(--color-ink)',
@@ -132,7 +143,7 @@ export default async function AdminRoomDetailPage({
       {deleted && <div className="fg-msg-success mb-6">Task deleted.</div>}
       {error && <div className="fg-msg-error mb-6">{error}</div>}
 
-      {/* Add new task form */}
+      {/* Add new task form — simplified */}
       <section className="mb-10">
         <h2 className="fg-section-label mb-3">Add a task</h2>
         <form action={createTaskTemplate} className="fg-card p-5 space-y-4">
@@ -152,49 +163,20 @@ export default async function AdminRoomDetailPage({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="fg-label" htmlFor="new-schedule-type">
-                Schedule type
-              </label>
-              <select
-                id="new-schedule-type"
-                name="schedule_type"
-                defaultValue="regular"
-                className="fg-input"
-              >
-                <option value="regular">Regular</option>
-                <option value="turnaround">On turnaround</option>
-              </select>
-            </div>
-            <div>
-              <label className="fg-label" htmlFor="new-freq-amount">
-                Every
-              </label>
-              <input
-                id="new-freq-amount"
-                name="freq_amount"
-                type="number"
-                min="1"
-                defaultValue="7"
-                className="fg-input"
-              />
-            </div>
-            <div>
-              <label className="fg-label" htmlFor="new-freq-unit">
-                Unit
-              </label>
-              <select
-                id="new-freq-unit"
-                name="freq_unit"
-                defaultValue="days"
-                className="fg-input"
-              >
-                <option value="days">days</option>
-                <option value="weeks">weeks</option>
-                <option value="months">months</option>
-              </select>
-            </div>
+          <div>
+            <label className="fg-label" htmlFor="new-schedule">How often</label>
+            <select
+              id="new-schedule"
+              name="schedule"
+              defaultValue="7"
+              className="fg-input"
+            >
+              {SCHEDULE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -205,7 +187,7 @@ export default async function AdminRoomDetailPage({
               id="new-notes"
               name="notes"
               rows={2}
-              placeholder="Special instructions, e.g. ⚠️ IMPORTANT: Use microfibre cloth only"
+              placeholder="Special instructions, e.g. ⚠️ Use microfibre cloth only"
               className="fg-input"
               style={{ resize: 'vertical' }}
             />

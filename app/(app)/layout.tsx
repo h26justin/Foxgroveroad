@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import MobileTabBar from './MobileTabBar'
 
 export default async function AuthedLayout({
   children,
@@ -24,12 +25,17 @@ export default async function AuthedLayout({
   const isAdmin = profile.role === 'admin'
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--color-cream)' }}>
+    <div
+      className="fg-app-shell md:flex"
+      style={{ background: 'var(--color-cream)' }}
+    >
+      {/* ---------- Desktop sidebar (hidden on mobile) ---------- */}
       <aside
-        className="w-64 shrink-0 border-r flex flex-col"
+        className="fg-desktop-only md:flex w-64 shrink-0 border-r flex-col"
         style={{
           background: 'var(--color-surface)',
           borderColor: 'var(--color-warm)',
+          minHeight: '100dvh',
         }}
       >
         <div className="px-6 pt-8 pb-6">
@@ -48,6 +54,7 @@ export default async function AuthedLayout({
         </div>
 
         <nav className="flex-1 px-3 space-y-1">
+          <NavLink href="/today" label="Today" />
           <NavLink href="/dashboard" label="Dashboard" />
           <NavLink href="/house" label="House" />
           <NavLink href="/bookings" label="My bookings" />
@@ -96,9 +103,38 @@ export default async function AuthedLayout({
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-8 py-10">{children}</div>
+      {/* ---------- Main content area ---------- */}
+      <main
+        className="flex-1 md:overflow-y-auto"
+        style={{ minHeight: '100dvh' }}
+      >
+        {/* Mobile sticky top bar */}
+        <div className="fg-mobile-only fg-topbar">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3 min-w-0">
+              <span style={{ fontSize: 18 }}>🏠</span>
+              <span className="fg-topbar-title truncate">Foxgrove Road</span>
+            </div>
+            <form action="/logout" method="POST">
+              <button
+                type="submit"
+                className="text-xs fg-mono px-2 py-1"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Log out
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10 fg-mobile-content-pad md:pb-10">
+          {children}
+        </div>
       </main>
+
+      {/* Mobile bottom tab bar */}
+      <MobileTabBar isAdmin={isAdmin} pendingCount={pendingCount} />
     </div>
   )
 }

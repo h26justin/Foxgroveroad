@@ -3,5 +3,5 @@ import { getCurrentUser } from '@/lib/auth'
 
 export default async function HomePage() {
   const user = await getCurrentUser()
-  redirect(user ? '/dashboard' : '/login')
+  redirect(user ? '/today' : '/login')
 }

@@ -3,37 +3,54 @@ import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { updateTaskTemplate, deleteTaskTemplate } from './actions'
 
-const TYPE_META: Record<
-  string,
-  { label: string; icon: string; color: string }
-> = {
-  bedroom: { label: 'Bedroom', icon: '🛏', color: 'var(--color-blue)' },
-  bathroom: { label: 'Bathroom', icon: '🛁', color: 'var(--color-blue)' },
-  kitchen: { label: 'Kitchen', icon: '🍳', color: 'var(--color-amber)' },
-  dining: { label: 'Dining', icon: '🍽', color: 'var(--color-amber)' },
-  living: { label: 'Living', icon: '🛋', color: 'var(--color-green)' },
-  utility: { label: 'Utility', icon: '🧺', color: 'var(--color-muted)' },
-  common: { label: 'Common', icon: '↗', color: 'var(--color-muted)' },
-  global: { label: 'Global', icon: '🏠', color: 'var(--color-gold)' },
+const TYPE_META: Record<string, { label: string; icon: string }> = {
+  bedroom: { label: 'Bedroom', icon: '🛏' },
+  bathroom: { label: 'Bathroom', icon: '🛁' },
+  kitchen: { label: 'Kitchen', icon: '🍳' },
+  dining: { label: 'Dining', icon: '🍽' },
+  living: { label: 'Living', icon: '🛋' },
+  utility: { label: 'Utility', icon: '🧺' },
+  common: { label: 'Common', icon: '↗' },
+  global: { label: 'Global', icon: '🏠' },
 }
 
 /**
- * Given frequency_days, work out what amount + unit to pre-fill the form with.
- * Picks the largest unit that gives a clean whole number.
- *   1   -> { amount: 1, unit: 'days' }
- *   7   -> { amount: 1, unit: 'weeks' }
- *   14  -> { amount: 2, unit: 'weeks' }
- *   30  -> { amount: 1, unit: 'months' }
- *   21  -> { amount: 21, unit: 'days' }   (3 weeks but stays in days for clarity)
+ * The full set of schedule options in one dropdown.
+ * Stored as `frequency_days` (or null + is_turnaround=true).
+ *
+ * `value` is what the form posts. Special value 'turnaround' for non-numeric.
  */
-function freqDaysToFormFields(days: number | null): {
-  amount: number
-  unit: 'days' | 'weeks' | 'months'
-} {
-  if (days == null || days < 1) return { amount: 7, unit: 'days' }
-  if (days % 30 === 0) return { amount: days / 30, unit: 'months' }
-  if (days === 7 || days === 14) return { amount: days / 7, unit: 'weeks' }
-  return { amount: days, unit: 'days' }
+const SCHEDULE_OPTIONS: { value: string; label: string }[] = [
+  { value: '1',           label: 'Every day' },
+  { value: '2',           label: 'Every 2 days' },
+  { value: '3',           label: 'Every 3 days' },
+  { value: '5',           label: 'Every 5 days' },
+  { value: '7',           label: 'Every week' },
+  { value: '14',          label: 'Every 2 weeks' },
+  { value: '21',          label: 'Every 3 weeks' },
+  { value: '30',          label: 'Every month' },
+  { value: '60',          label: 'Every 2 months' },
+  { value: '90',          label: 'Every 3 months' },
+  { value: '120',         label: 'Every 4 months' },
+  { value: '150',         label: 'Every 5 months' },
+  { value: '180',         label: 'Every 6 months' },
+  { value: '365',         label: 'Every year' },
+  { value: 'turnaround',  label: 'On turnaround (between guests)' },
+]
+
+/**
+ * Pick the best dropdown option for a stored frequency_days value.
+ * Falls back to "every 7 days" if no exact match. Returns the option's
+ * `value` string.
+ */
+function pickScheduleValue(days: number | null, isTurnaround: boolean): string {
+  if (isTurnaround) return 'turnaround'
+  if (days == null) return '7'
+  // Try exact match first
+  const exact = SCHEDULE_OPTIONS.find((o) => o.value === String(days))
+  if (exact) return exact.value
+  // Otherwise we'll show a custom option and select it
+  return String(days)
 }
 
 export default async function AdminTaskEditPage({
@@ -71,7 +88,6 @@ export default async function AdminTaskEditPage({
     )
   }
 
-  // Fetch all rooms so the user can move the task to a different room.
   const { data: allRooms } = await supabase
     .from('rooms')
     .select('id, name, floor, room_type')
@@ -83,10 +99,18 @@ export default async function AdminTaskEditPage({
     ? TYPE_META[currentRoom.room_type] ?? TYPE_META.common
     : TYPE_META.common
 
-  const { amount, unit } = freqDaysToFormFields(task.frequency_days)
+  const currentScheduleValue = pickScheduleValue(
+    task.frequency_days,
+    task.is_turnaround
+  )
+  const isCustomFrequency =
+    !task.is_turnaround &&
+    task.frequency_days != null &&
+    !SCHEDULE_OPTIONS.some((o) => o.value === String(task.frequency_days))
 
   return (
     <div className="max-w-2xl">
+      {/* Breadcrumb / back */}
       <div className="mb-6">
         <Link
           href={`/admin/rooms/${roomId}`}
@@ -111,8 +135,7 @@ export default async function AdminTaskEditPage({
           className="text-sm fg-mono mt-1"
           style={{ color: 'var(--color-muted)' }}
         >
-          You're editing the task{' '}
-          <span style={{ color: 'var(--color-ink)' }}>{task.name}</span>.
+          {task.name}
         </p>
       </div>
 
@@ -121,16 +144,14 @@ export default async function AdminTaskEditPage({
 
       <form
         action={updateTaskTemplate}
-        className="fg-card-elevated space-y-6"
+        className="fg-card p-5 md:p-7 space-y-5"
       >
         <input type="hidden" name="task_id" value={task.id} />
         <input type="hidden" name="room_id_original" value={roomId} />
 
         {/* Name */}
         <div>
-          <label className="fg-label" htmlFor="edit-name">
-            Name
-          </label>
+          <label className="fg-label" htmlFor="edit-name">Name</label>
           <input
             id="edit-name"
             name="name"
@@ -141,11 +162,38 @@ export default async function AdminTaskEditPage({
           />
         </div>
 
+        {/* Schedule — combined dropdown */}
+        <div>
+          <label className="fg-label" htmlFor="edit-schedule">
+            How often
+          </label>
+          <select
+            id="edit-schedule"
+            name="schedule"
+            defaultValue={currentScheduleValue}
+            className="fg-input"
+          >
+            {isCustomFrequency && (
+              <option value={String(task.frequency_days)}>
+                Every {task.frequency_days} days (custom)
+              </option>
+            )}
+            {SCHEDULE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="fg-helptext">
+            "On turnaround" means the task fires when a guest checks out and a
+            new one is due — sheets, towels, etc. Everything else repeats on
+            its day count.
+          </p>
+        </div>
+
         {/* Room */}
         <div>
-          <label className="fg-label" htmlFor="edit-room">
-            Room
-          </label>
+          <label className="fg-label" htmlFor="edit-room">Room</label>
           <select
             id="edit-room"
             name="room_id"
@@ -161,154 +209,42 @@ export default async function AdminTaskEditPage({
               )
             })}
           </select>
-          <p className="fg-helptext">
-            Change this if you want to move the task to a different room.
-          </p>
-        </div>
-
-        {/* Schedule type */}
-        <div>
-          <label className="fg-label">Schedule type</label>
-          <div className="grid grid-cols-2 gap-2">
-            <label
-              className="fg-card flex items-start gap-3 p-3 cursor-pointer"
-              style={{
-                borderColor: !task.is_turnaround
-                  ? 'var(--color-slate)'
-                  : 'var(--color-warm)',
-              }}
-            >
-              <input
-                type="radio"
-                name="schedule_type"
-                value="regular"
-                defaultChecked={!task.is_turnaround}
-                className="mt-1"
-              />
-              <div>
-                <div
-                  className="text-sm"
-                  style={{
-                    fontFamily: 'var(--font-serif)',
-                    color: 'var(--color-ink)',
-                  }}
-                >
-                  Regular schedule
-                </div>
-                <div
-                  className="text-xs fg-mono mt-0.5"
-                  style={{ color: 'var(--color-muted)' }}
-                >
-                  Repeats every N days/weeks/months
-                </div>
-              </div>
-            </label>
-            <label
-              className="fg-card flex items-start gap-3 p-3 cursor-pointer"
-              style={{
-                borderColor: task.is_turnaround
-                  ? 'var(--color-slate)'
-                  : 'var(--color-warm)',
-              }}
-            >
-              <input
-                type="radio"
-                name="schedule_type"
-                value="turnaround"
-                defaultChecked={task.is_turnaround}
-                className="mt-1"
-              />
-              <div>
-                <div
-                  className="text-sm"
-                  style={{
-                    fontFamily: 'var(--font-serif)',
-                    color: 'var(--color-ink)',
-                  }}
-                >
-                  On turnaround
-                </div>
-                <div
-                  className="text-xs fg-mono mt-0.5"
-                  style={{ color: 'var(--color-muted)' }}
-                >
-                  Triggered by guest changeover
-                </div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* Frequency */}
-        <div>
-          <label className="fg-label">Frequency</label>
-          <div className="flex items-center gap-2">
-            <span
-              className="text-sm shrink-0"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              Every
-            </span>
-            <input
-              name="freq_amount"
-              type="number"
-              min="1"
-              defaultValue={amount}
-              className="fg-input"
-              style={{ maxWidth: 100, textAlign: 'center' }}
-            />
-            <select
-              name="freq_unit"
-              defaultValue={unit}
-              className="fg-input"
-              style={{ maxWidth: 140 }}
-            >
-              <option value="days">days</option>
-              <option value="weeks">weeks</option>
-              <option value="months">months</option>
-            </select>
-          </div>
-          <p className="fg-helptext">
-            Stored as days (e.g. "every 1 week" → 7 days). Ignored if the task
-            is set to turnaround.
-          </p>
         </div>
 
         {/* Notes */}
         <div>
-          <label className="fg-label" htmlFor="edit-notes">
-            Note
-          </label>
+          <label className="fg-label" htmlFor="edit-notes">Note</label>
           <textarea
             id="edit-notes"
             name="notes"
             rows={3}
             defaultValue={task.notes ?? ''}
-            placeholder="Special instructions, e.g. ⚠️ IMPORTANT: Use microfibre cloth only"
+            placeholder="Special instructions, e.g. ⚠️ Use microfibre cloth only"
             className="fg-input"
             style={{ resize: 'vertical' }}
           />
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <div className="flex flex-col-reverse md:flex-row md:items-center md:justify-between gap-3 pt-2">
           <Link
             href={`/admin/rooms/${roomId}`}
-            className="fg-btn-ghost text-sm"
+            className="fg-btn-ghost text-sm text-center"
           >
             Cancel
           </Link>
-          <button type="submit" className="fg-btn-primary" style={{ width: 'auto' }}>
+          <button
+            type="submit"
+            className="fg-btn-primary"
+            style={{ width: 'auto' }}
+          >
             Save changes
           </button>
         </div>
       </form>
 
       {/* Delete (separate form to avoid nested forms) */}
-      <form
-        action={deleteTaskTemplate}
-        className="mt-6 flex justify-end"
-      >
+      <form action={deleteTaskTemplate} className="mt-6 flex justify-end">
         <input type="hidden" name="task_id" value={task.id} />
         <input type="hidden" name="room_id" value={roomId} />
         <button

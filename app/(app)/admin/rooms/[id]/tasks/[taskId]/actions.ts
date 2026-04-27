@@ -5,10 +5,28 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
 
-const UNIT_TO_DAYS: Record<string, number> = {
-  days: 1,
-  weeks: 7,
-  months: 30,
+/**
+ * Parse the simplified `schedule` form field. It's either:
+ *   - 'turnaround' (special)
+ *   - a positive integer string (number of days)
+ */
+function parseSchedule(raw: string): {
+  isTurnaround: boolean
+  frequencyDays: number | null
+  error?: string
+} {
+  if (raw === 'turnaround') {
+    return { isTurnaround: true, frequencyDays: null }
+  }
+  const days = parseInt(raw, 10)
+  if (!Number.isFinite(days) || days < 1) {
+    return {
+      isTurnaround: false,
+      frequencyDays: null,
+      error: 'Pick a schedule for the task',
+    }
+  }
+  return { isTurnaround: false, frequencyDays: days }
 }
 
 export async function updateTaskTemplate(formData: FormData) {
@@ -19,9 +37,7 @@ export async function updateTaskTemplate(formData: FormData) {
   const originalRoomId = String(formData.get('room_id_original') ?? '')
   const newRoomId = String(formData.get('room_id') ?? '')
   const name = String(formData.get('name') ?? '').trim()
-  const scheduleType = String(formData.get('schedule_type') ?? 'regular')
-  const freqAmountRaw = String(formData.get('freq_amount') ?? '')
-  const freqUnit = String(formData.get('freq_unit') ?? 'days')
+  const scheduleRaw = String(formData.get('schedule') ?? '')
   const notesRaw = String(formData.get('notes') ?? '').trim()
 
   const back = `/admin/rooms/${originalRoomId}/tasks/${taskId}`
@@ -36,23 +52,9 @@ export async function updateTaskTemplate(formData: FormData) {
     redirect(`${back}?error=${encodeURIComponent('Room is required')}`)
   }
 
-  let frequencyDays: number | null = null
-  let isTurnaround = false
-
-  if (scheduleType === 'turnaround') {
-    isTurnaround = true
-    frequencyDays = null
-  } else {
-    const amount = parseInt(freqAmountRaw, 10)
-    const perUnit = UNIT_TO_DAYS[freqUnit]
-    if (!Number.isFinite(amount) || amount < 1 || !perUnit) {
-      redirect(
-        `${back}?error=${encodeURIComponent(
-          'Frequency must be a positive number with a valid unit'
-        )}`
-      )
-    }
-    frequencyDays = amount * perUnit
+  const sched = parseSchedule(scheduleRaw)
+  if (sched.error) {
+    redirect(`${back}?error=${encodeURIComponent(sched.error)}`)
   }
 
   const { error } = await supabase
@@ -60,8 +62,8 @@ export async function updateTaskTemplate(formData: FormData) {
     .update({
       room_id: newRoomId,
       name,
-      frequency_days: frequencyDays,
-      is_turnaround: isTurnaround,
+      frequency_days: sched.frequencyDays,
+      is_turnaround: sched.isTurnaround,
       notes: notesRaw || null,
     })
     .eq('id', taskId)
@@ -72,10 +74,8 @@ export async function updateTaskTemplate(formData: FormData) {
 
   revalidatePath(`/admin/rooms/${originalRoomId}`)
   revalidatePath('/admin/rooms')
-  // If the room was changed, revalidate the new room's page too
   if (newRoomId !== originalRoomId) {
     revalidatePath(`/admin/rooms/${newRoomId}`)
-    // And bounce the user to the new room's edit page
     redirect(`/admin/rooms/${newRoomId}/tasks/${taskId}?saved=1`)
   }
   redirect(`${back}?saved=1`)

@@ -55,7 +55,7 @@ export async function requireAdmin() {
   const profile = await requireProfile()
   if (profile.role !== 'admin') {
     const { redirect } = await import('next/navigation')
-    redirect('/dashboard')
+    redirect('/today')
   }
   return profile
 }
