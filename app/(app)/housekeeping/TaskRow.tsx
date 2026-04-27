@@ -27,13 +27,6 @@ export default function TaskRow({
   const [isCompleting, setIsCompleting] = useState(false)
   const [, startTransition] = useTransition()
 
-  const statusClass =
-    status === 'overdue'
-      ? 'fg-taprow-overdue'
-      : status === 'due'
-      ? 'fg-taprow-due'
-      : 'fg-taprow-scheduled'
-
   function handleTick() {
     if (isCompleting || !canTick) return
     setIsCompleting(true)
@@ -41,21 +34,20 @@ export default function TaskRow({
     startTransition(async () => {
       const result = await markTaskComplete(taskId)
       if (result?.error) {
-        // Roll the optimistic UI back
         setIsCompleting(false)
-        router.push(`/today?error=${encodeURIComponent(result.error)}`)
+        router.push(`/housekeeping?error=${encodeURIComponent(result.error)}`)
         return
       }
-      // Wait a moment so the user sees the cross-out animation finish, then refresh.
+      // Wait for the cross-out animation to play, then refresh.
       setTimeout(() => {
-        router.push(`/today?done=${result?.completionId ?? ''}`)
+        router.push(`/housekeeping?done=${result?.completionId ?? ''}`)
         router.refresh()
       }, 350)
     })
   }
 
   return (
-    <div className={`fg-taprow ${statusClass} ${isCompleting ? 'is-completing' : ''}`}>
+    <div className={`fg-taprow${isCompleting ? ' is-completing' : ''}`}>
       {canTick ? (
         <button
           type="button"
@@ -66,7 +58,15 @@ export default function TaskRow({
         >
           <span className="fg-taprow-check-circle">
             {isCompleting && (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ width: 16, height: 16 }}
+              >
                 <path d="M5 12l5 5L20 7" />
               </svg>
             )}
@@ -87,11 +87,16 @@ export default function TaskRow({
       <div className="fg-taprow-body">
         <div className="fg-taprow-name">{name}</div>
         <div className="fg-taprow-meta">
-          <span>{describeStatus(status, daysOverdue, frequencyDays)}</span>
+          <span style={statusColor(status)}>
+            {describeStatus(status, daysOverdue, frequencyDays)}
+          </span>
           {notes && (
             <>
               <span style={{ opacity: 0.4 }}>·</span>
-              <span style={{ color: 'var(--color-amber)' }} className="truncate">
+              <span
+                style={{ color: 'var(--color-amber)' }}
+                className="truncate"
+              >
                 {notes.length > 60 ? notes.slice(0, 60) + '…' : notes}
               </span>
             </>
@@ -100,6 +105,12 @@ export default function TaskRow({
       </div>
     </div>
   )
+}
+
+function statusColor(status: TaskStatus): React.CSSProperties {
+  if (status === 'overdue') return { color: 'var(--color-red)' }
+  if (status === 'due') return { color: 'var(--color-amber)' }
+  return { color: 'var(--color-muted)' }
 }
 
 function describeStatus(

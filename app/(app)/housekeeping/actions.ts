@@ -39,7 +39,7 @@ export async function markTaskComplete(
     return { error: error.message }
   }
 
-  revalidatePath('/today')
+  revalidatePath('/housekeeping')
   revalidatePath('/dashboard')
   return { completionId: (data as any)?.id }
 }
@@ -67,7 +67,7 @@ export async function undoTaskComplete(
     return { error: error.message }
   }
 
-  revalidatePath('/today')
+  revalidatePath('/housekeeping')
   revalidatePath('/dashboard')
   return { ok: true }
 }

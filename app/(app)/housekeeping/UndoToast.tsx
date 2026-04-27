@@ -10,7 +10,6 @@ export default function UndoToast({ completionId }: { completionId: string }) {
   const [, startTransition] = useTransition()
 
   useEffect(() => {
-    // Auto-dismiss after 10s
     const t = setTimeout(() => setVisible(false), 10_000)
     return () => clearTimeout(t)
   }, [completionId])
@@ -21,10 +20,10 @@ export default function UndoToast({ completionId }: { completionId: string }) {
     startTransition(async () => {
       const result = await undoTaskComplete(completionId)
       if (result?.error) {
-        router.push(`/today?error=${encodeURIComponent(result.error)}`)
+        router.push(`/housekeeping?error=${encodeURIComponent(result.error)}`)
         return
       }
-      router.push('/today')
+      router.push('/housekeeping')
       router.refresh()
     })
   }
