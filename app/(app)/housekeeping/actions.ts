@@ -71,3 +71,41 @@ export async function undoTaskComplete(
   revalidatePath('/dashboard')
   return { ok: true }
 }
+
+/**
+ * Save the user's preferred room ordering.
+ * Replaces all existing rows for this user, then inserts the new ordering.
+ * (Used by the "Custom" sort mode when the user drags rooms around.)
+ */
+export async function saveRoomOrder(
+  orderedRoomIds: string[]
+): Promise<{ ok?: true; error?: string }> {
+  const profile = await requireProfile()
+  const supabase = await createClient()
+
+  // Wipe their existing ordering
+  const { error: delErr } = await supabase
+    .from('user_room_order')
+    .delete()
+    .eq('user_id', profile.id)
+  if (delErr) return { error: delErr.message }
+
+  if (orderedRoomIds.length === 0) {
+    return { ok: true }
+  }
+
+  const rows = orderedRoomIds.map((roomId, idx) => ({
+    user_id: profile.id,
+    room_id: roomId,
+    position: idx,
+  }))
+
+  const { error: insErr } = await supabase
+    .from('user_room_order')
+    .insert(rows)
+  if (insErr) return { error: insErr.message }
+
+  // No revalidatePath — the client component already reflects the new
+  // order locally; the server fetch on the next visit will agree with it.
+  return { ok: true }
+}

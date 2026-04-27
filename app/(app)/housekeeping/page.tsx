@@ -7,7 +7,7 @@ export const revalidate = 0
 export default async function HousekeepingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ room?: string; done?: string; error?: string }>
+  searchParams: Promise<{ room?: string; error?: string }>
 }) {
   const profile = await requireProfile()
   const sp = await searchParams
@@ -41,14 +41,21 @@ export default async function HousekeepingPage({
     .order('floor', { ascending: false })
     .order('name')
 
+  // 4) The user's custom room ordering (if any).
+  const { data: roomOrderRaw } = await supabase
+    .from('user_room_order')
+    .select('room_id, position')
+    .eq('user_id', profile.id)
+    .order('position')
+
   return (
     <HousekeepingClient
       dueTasks={(dueRowsRaw as any[]) ?? []}
       completions={(completionsRaw as any[]) ?? []}
       rooms={(roomsRaw as any[]) ?? []}
+      roomOrder={(roomOrderRaw as any[]) ?? []}
       profile={profile}
       activeRoomId={sp.room ?? null}
-      doneCompletionId={sp.done ?? null}
       errorMessage={sp.error ?? null}
     />
   )

@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { markTaskComplete } from './actions'
+import { useState } from 'react'
 
 type TaskStatus = 'overdue' | 'due' | 'scheduled' | 'turnaround' | 'no_schedule'
 
@@ -14,6 +12,7 @@ export default function TaskRow({
   daysOverdue,
   frequencyDays,
   canTick,
+  onTick,
 }: {
   taskId: string
   name: string
@@ -22,28 +21,18 @@ export default function TaskRow({
   daysOverdue: number | null
   frequencyDays: number | null
   canTick: boolean
+  onTick: () => void
 }) {
-  const router = useRouter()
   const [isCompleting, setIsCompleting] = useState(false)
-  const [, startTransition] = useTransition()
 
-  function handleTick() {
+  function handleClick() {
     if (isCompleting || !canTick) return
     setIsCompleting(true)
-
-    startTransition(async () => {
-      const result = await markTaskComplete(taskId)
-      if (result?.error) {
-        setIsCompleting(false)
-        router.push(`/housekeeping?error=${encodeURIComponent(result.error)}`)
-        return
-      }
-      // Wait for the cross-out animation to play, then refresh.
-      setTimeout(() => {
-        router.push(`/housekeeping?done=${result?.completionId ?? ''}`)
-        router.refresh()
-      }, 350)
-    })
+    // Hand off to parent. Parent does the optimistic remove from state
+    // after a short delay so the cross-out animation can play.
+    setTimeout(() => {
+      onTick()
+    }, 320)
   }
 
   return (
@@ -51,7 +40,7 @@ export default function TaskRow({
       {canTick ? (
         <button
           type="button"
-          onClick={handleTick}
+          onClick={handleClick}
           className="fg-taprow-check"
           aria-label={`Mark ${name} complete`}
           disabled={isCompleting}

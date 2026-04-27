@@ -1,9 +1,15 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import TaskRow from './TaskRow'
-import UndoToast from './UndoToast'
+import {
+  markTaskComplete,
+  undoTaskComplete,
+  saveRoomOrder,
+} from './actions'
+
+// ─── Types ────────────────────────────────────────────────────────────
 
 type DueTask = {
   id: string
@@ -25,7 +31,8 @@ type Completion = {
   completed_at: string
   completed_by: string | null
   task_template_id: string
-  task_templates: any // eslint-disable-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  task_templates: any
 }
 
 type Room = {
@@ -35,7 +42,13 @@ type Room = {
   room_type: string
 }
 
+type RoomOrderRow = { room_id: string; position: number }
+
 type Profile = { id: string; full_name: string; role: string }
+
+type SortMode = 'most_due' | 'custom'
+
+// ─── Visual constants ─────────────────────────────────────────────────
 
 const TYPE_META: Record<string, { icon: string }> = {
   bedroom:  { icon: '🛏' },
@@ -48,26 +61,90 @@ const TYPE_META: Record<string, { icon: string }> = {
   global:   { icon: '🏠' },
 }
 
+function floorLabel(floor: number): string {
+  if (floor === 2) return 'Attic'
+  if (floor === 1) return 'First floor'
+  if (floor === 0) return 'Garden floor'
+  if (floor < 0) return `Lower ${Math.abs(floor)}`
+  return `Floor ${floor}`
+}
+
+// ─── Toast (local; replaces UndoToast which used URL params) ──────────
+
+function Toast({
+  message,
+  onUndo,
+  onDismiss,
+}: {
+  message: string
+  onUndo?: () => void
+  onDismiss: () => void
+}) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 8000)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+  return (
+    <div className="fg-toast" role="status" aria-live="polite">
+      <span>{message}</span>
+      {onUndo && (
+        <button type="button" onClick={onUndo} className="fg-toast-undo">
+          Undo
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────
+
 export default function HousekeepingClient({
-  dueTasks,
-  completions,
+  dueTasks: initialDueTasks,
+  completions: initialCompletions,
   rooms,
+  roomOrder,
   profile,
   activeRoomId,
-  doneCompletionId,
   errorMessage,
 }: {
   dueTasks: DueTask[]
   completions: Completion[]
   rooms: Room[]
+  roomOrder: RoomOrderRow[]
   profile: Profile
   activeRoomId: string | null
-  doneCompletionId: string | null
   errorMessage: string | null
 }) {
   const canTick = profile.role === 'admin' || profile.role === 'cleaner'
 
-  // Group due tasks and completions by room
+  // ─── Live tickable state ───────────────────────────────────────
+  // Held in client state so optimistic ticks don't require a refetch.
+  const [dueTasks, setDueTasks] = useState<DueTask[]>(initialDueTasks)
+  const [completions, setCompletions] = useState<Completion[]>(initialCompletions)
+  const [toast, setToast] = useState<{
+    message: string
+    completionId: string | null
+    snapshot: { task: DueTask; completion: Completion } | null
+  } | null>(null)
+
+  // Re-sync if server props change (rare — happens on hard nav)
+  useEffect(() => { setDueTasks(initialDueTasks) }, [initialDueTasks])
+  useEffect(() => { setCompletions(initialCompletions) }, [initialCompletions])
+
+  // ─── Sort mode state ───────────────────────────────────────────
+  const [sortMode, setSortMode] = useState<SortMode>(
+    roomOrder.length > 0 ? 'custom' : 'most_due'
+  )
+
+  // The user's customised order, mutable in client state. When sortMode
+  // is 'custom' and this list is empty, we seed from the server-provided
+  // order; if that's empty, we seed from current most-due ordering.
+  const [customOrder, setCustomOrder] = useState<string[]>(() =>
+    roomOrder.map((r) => r.room_id)
+  )
+  const [, startSaveTransition] = useTransition()
+
+  // ─── Group due tasks and completions by room ─────────────────────────
   const dueByRoom = useMemo(() => {
     const m = new Map<string, DueTask[]>()
     for (const t of dueTasks) {
@@ -80,6 +157,7 @@ export default function HousekeepingClient({
   const completionsByRoom = useMemo(() => {
     const m = new Map<string, Completion[]>()
     for (const c of completions) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const roomId = (c.task_templates as any)?.room_id
       if (!roomId) continue
       if (!m.has(roomId)) m.set(roomId, [])
@@ -88,31 +166,70 @@ export default function HousekeepingClient({
     return m
   }, [completions])
 
-  // Visible rooms: when a chip is active → just that room. Otherwise →
-  // any room with due tasks OR completions today (skip empty rooms).
-  const visibleRooms = useMemo(() => {
+  // ─── Visible rooms ───────────────────────────────────────────────────
+  // When a chip is active → just that room. Otherwise → rooms with due
+  // tasks or completions today (skip empty ones in 'most_due' mode).
+  // 'custom' mode shows ALL rooms so the user can drag any of them.
+  const visibleRooms: Room[] = useMemo(() => {
     let candidates = rooms
     if (activeRoomId) {
       candidates = rooms.filter((r) => r.id === activeRoomId)
-    } else {
+    } else if (sortMode === 'most_due') {
       candidates = rooms.filter(
         (r) => dueByRoom.has(r.id) || completionsByRoom.has(r.id)
       )
     }
-    return candidates.sort((a, b) => {
-      const dueA = dueByRoom.get(a.id)?.length ?? 0
-      const dueB = dueByRoom.get(b.id)?.length ?? 0
-      return dueB - dueA
-    })
-  }, [rooms, dueByRoom, completionsByRoom, activeRoomId])
+    // In custom mode we keep ALL rooms.
+    return candidates
+  }, [rooms, dueByRoom, completionsByRoom, activeRoomId, sortMode])
 
-  // Accordion expansion state
+  // ─── Group visible rooms by floor ─────────────────────────────────────
+  // Floors are always grouped, regardless of sort mode. Within a floor
+  // the order is determined by sortMode.
+  const roomsByFloor = useMemo(() => {
+    const m = new Map<number, Room[]>()
+    for (const r of visibleRooms) {
+      if (!m.has(r.floor)) m.set(r.floor, [])
+      m.get(r.floor)!.push(r)
+    }
+
+    // Sort the rooms inside each floor according to sortMode
+    for (const [floor, list] of m.entries()) {
+      if (sortMode === 'most_due') {
+        list.sort((a, b) => {
+          const da = dueByRoom.get(a.id)?.length ?? 0
+          const db = dueByRoom.get(b.id)?.length ?? 0
+          if (db !== da) return db - da
+          return a.name.localeCompare(b.name)
+        })
+      } else {
+        // Custom: respect customOrder; rooms not in customOrder get
+        // appended alphabetically at the end of their floor.
+        const posIndex = new Map<string, number>()
+        customOrder.forEach((rid, i) => posIndex.set(rid, i))
+        list.sort((a, b) => {
+          const pa = posIndex.get(a.id)
+          const pb = posIndex.get(b.id)
+          if (pa !== undefined && pb !== undefined) return pa - pb
+          if (pa !== undefined) return -1
+          if (pb !== undefined) return 1
+          return a.name.localeCompare(b.name)
+        })
+      }
+      m.set(floor, list)
+    }
+    return m
+  }, [visibleRooms, sortMode, dueByRoom, customOrder])
+
+  const orderedFloors = useMemo(
+    () => Array.from(roomsByFloor.keys()).sort((a, b) => b - a),
+    [roomsByFloor]
+  )
+
+  // ─── Accordion expansion state ───────────────────────────────────────
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(() =>
     activeRoomId ? new Set([activeRoomId]) : new Set()
   )
-
-  // When the user clicks a chip and the URL's `room` param changes,
-  // make sure the filtered room is expanded so they see the tasks.
   useEffect(() => {
     if (activeRoomId) {
       setExpandedRooms((prev) => {
@@ -133,13 +250,13 @@ export default function HousekeepingClient({
     })
   }
 
-  // Stats for the header strip
+  // ─── Stats ──────────────────────────────────────────────────────────
   const overdueCount = dueTasks.filter((t) => t.status === 'overdue').length
   const dueTodayCount = dueTasks.filter((t) => t.status === 'due').length
   const totalDueCount = dueTasks.length
   const completedCount = completions.length
 
-  // Chip strip: only rooms that have due tasks
+  // ─── Chip strip ─────────────────────────────────────────────────────
   const chipRooms = useMemo(() => {
     return rooms
       .filter((r) => dueByRoom.has(r.id))
@@ -147,16 +264,241 @@ export default function HousekeepingClient({
       .sort((a, b) => b.count - a.count)
   }, [rooms, dueByRoom])
 
-  // For UI date string
   const dateStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
   })
 
+  // ─── Tick handlers (optimistic, no router.refresh) ────────────────────
+  const handleTick = (task: DueTask) => {
+    if (!canTick) return
+
+    // Snapshot for undo
+    const snapshot = { ...task }
+
+    // Optimistic local mutation: remove from dueTasks
+    setDueTasks((prev) => prev.filter((t) => t.id !== task.id))
+
+    // Fire the server action
+    ;(async () => {
+      const result = await markTaskComplete(task.id)
+      if (result.error || !result.completionId) {
+        // Roll back
+        setDueTasks((prev) => [snapshot, ...prev])
+        setToast({
+          message: result.error || 'Could not complete task',
+          completionId: null,
+          snapshot: null,
+        })
+        return
+      }
+
+      // Build a synthetic completion object so it shows in "Completed today"
+      const room = rooms.find((r) => r.id === task.room_id)
+      const newCompletion: Completion = {
+        id: result.completionId,
+        completed_at: new Date().toISOString(),
+        completed_by: profile.id,
+        task_template_id: task.id,
+        task_templates: {
+          id: task.id,
+          name: task.name,
+          room_id: task.room_id,
+          rooms: room ? { id: room.id, name: room.name } : null,
+        },
+      }
+      setCompletions((prev) => [newCompletion, ...prev])
+
+      setToast({
+        message: '✓ Marked complete',
+        completionId: result.completionId,
+        snapshot: { task: snapshot, completion: newCompletion },
+      })
+    })()
+  }
+
+  const handleUndo = () => {
+    if (!toast?.completionId || !toast?.snapshot) {
+      setToast(null)
+      return
+    }
+    const completionId = toast.completionId
+    const { task, completion } = toast.snapshot
+
+    // Optimistic: put the task back, remove the completion
+    setDueTasks((prev) => [task, ...prev])
+    setCompletions((prev) => prev.filter((c) => c.id !== completion.id))
+    setToast(null)
+
+    ;(async () => {
+      const result = await undoTaskComplete(completionId)
+      if (result.error) {
+        // Roll back the rollback (this is rare)
+        setDueTasks((prev) => prev.filter((t) => t.id !== task.id))
+        setCompletions((prev) => [completion, ...prev])
+        setToast({
+          message: result.error,
+          completionId: null,
+          snapshot: null,
+        })
+      }
+    })()
+  }
+
+  // ─── Sort mode toggle ────────────────────────────────────────────────
+  const switchToCustom = () => {
+    setSortMode('custom')
+    // Seed customOrder with current visible order if we don't have one yet
+    if (customOrder.length === 0) {
+      const seeded: string[] = []
+      for (const floor of orderedFloors) {
+        for (const r of roomsByFloor.get(floor) ?? []) {
+          seeded.push(r.id)
+        }
+      }
+      setCustomOrder(seeded)
+      // Persist (silent)
+      startSaveTransition(async () => {
+        await saveRoomOrder(seeded)
+      })
+    }
+  }
+  const switchToMostDue = () => {
+    setSortMode('most_due')
+  }
+  const resetCustom = () => {
+    if (
+      !window.confirm(
+        'Reset to default ordering? Your custom layout will be lost.'
+      )
+    )
+      return
+    setCustomOrder([])
+    setSortMode('most_due')
+    startSaveTransition(async () => {
+      await saveRoomOrder([])
+    })
+  }
+
+  // ─── Drag-to-reorder ──────────────────────────────────────────────────
+  // Pointer-events drag, only active in custom mode. Reorder within the
+  // same floor only (cross-floor reorders would break the floor groupings).
+  const [drag, setDrag] = useState<{
+    roomId: string
+    name: string
+    floor: number
+    x: number
+    y: number
+  } | null>(null)
+  const [hoverIndex, setHoverIndex] = useState<{
+    floor: number
+    insertAtRoomId: string
+  } | null>(null)
+
+  function handleDragStart(
+    e: React.PointerEvent,
+    room: Room
+  ) {
+    if (sortMode !== 'custom') return
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    const target = e.currentTarget as HTMLElement
+    target.setPointerCapture(e.pointerId)
+    setDrag({
+      roomId: room.id,
+      name: room.name,
+      floor: room.floor,
+      x: e.clientX,
+      y: e.clientY,
+    })
+  }
+
+  function handleDragMove(e: React.PointerEvent) {
+    if (!drag) return
+    e.preventDefault()
+    setDrag((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : prev))
+
+    const stack = document.elementsFromPoint(e.clientX, e.clientY)
+    let foundCard: HTMLElement | null = null
+    for (const el of stack) {
+      if (el instanceof HTMLElement && el.dataset.roomCard) {
+        foundCard = el
+        break
+      }
+    }
+    if (
+      foundCard?.dataset.roomId &&
+      foundCard?.dataset.floor !== undefined &&
+      Number(foundCard.dataset.floor) === drag.floor &&
+      foundCard.dataset.roomId !== drag.roomId
+    ) {
+      setHoverIndex({
+        floor: drag.floor,
+        insertAtRoomId: foundCard.dataset.roomId,
+      })
+    } else {
+      setHoverIndex(null)
+    }
+  }
+
+  function handleDragEnd(e: React.PointerEvent) {
+    if (!drag) return
+    const target = e.currentTarget as HTMLElement
+    try { target.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
+
+    const movingId = drag.roomId
+    const insertBeforeId = hoverIndex?.insertAtRoomId ?? null
+
+    setDrag(null)
+    setHoverIndex(null)
+
+    if (!insertBeforeId) return
+
+    // Build the new customOrder: move `movingId` to be immediately before
+    // `insertBeforeId`, preserving all others.
+    setCustomOrder((prev) => {
+      // Make sure the current full set of room IDs (in their current sorted
+      // order) is the basis — this ensures rooms not yet in the saved order
+      // get included.
+      const currentFullOrder: string[] = []
+      for (const floor of orderedFloors) {
+        for (const r of roomsByFloor.get(floor) ?? []) {
+          currentFullOrder.push(r.id)
+        }
+      }
+      const without = currentFullOrder.filter((id) => id !== movingId)
+      const idx = without.indexOf(insertBeforeId)
+      if (idx === -1) return prev
+      const next = [...without.slice(0, idx), movingId, ...without.slice(idx)]
+
+      // Persist
+      startSaveTransition(async () => {
+        await saveRoomOrder(next)
+      })
+      return next
+    })
+  }
+
+  function handleDragCancel(e: React.PointerEvent) {
+    if (!drag) return
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch { /* ignore */ }
+    setDrag(null)
+    setHoverIndex(null)
+  }
+
+  // Lock body scroll while dragging
+  useEffect(() => {
+    if (drag) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [drag])
+
+  // ─── Render ──────────────────────────────────────────────────────────
   return (
     <div>
-      {/* ─── Header ─── */}
+      {/* Header */}
       <div className="mb-5">
         <p
           className="fg-section-label mb-1"
@@ -214,7 +556,52 @@ export default function HousekeepingClient({
         </p>
       </div>
 
-      {/* ─── Filter chips ─── */}
+      {/* Sort-mode toggle */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span
+          className="fg-section-label"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Sort:
+        </span>
+        <button
+          type="button"
+          onClick={switchToMostDue}
+          className={`fg-chip${sortMode === 'most_due' ? ' fg-chip-active' : ''}`}
+          aria-pressed={sortMode === 'most_due'}
+        >
+          Most to do
+        </button>
+        <button
+          type="button"
+          onClick={switchToCustom}
+          className={`fg-chip${sortMode === 'custom' ? ' fg-chip-active' : ''}`}
+          aria-pressed={sortMode === 'custom'}
+        >
+          ⋮⋮ Custom
+        </button>
+        {sortMode === 'custom' && customOrder.length > 0 && (
+          <button
+            type="button"
+            onClick={resetCustom}
+            className="fg-chip"
+            style={{ color: 'var(--color-muted)' }}
+            title="Reset custom order"
+          >
+            Reset
+          </button>
+        )}
+        {sortMode === 'custom' && (
+          <span
+            className="text-xs fg-mono"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            Drag a room to reorder within its floor.
+          </span>
+        )}
+      </div>
+
+      {/* Filter chips */}
       {chipRooms.length > 0 && (
         <div className="fg-chip-strip mb-5">
           <Link
@@ -239,11 +626,10 @@ export default function HousekeepingClient({
         </div>
       )}
 
-      {/* ─── Error message ─── */}
       {errorMessage && <div className="fg-msg-error mb-4">{errorMessage}</div>}
 
-      {/* ─── Empty state ─── */}
-      {totalDueCount === 0 && completedCount === 0 && (
+      {/* Empty state */}
+      {totalDueCount === 0 && completedCount === 0 && sortMode === 'most_due' && (
         <div className="fg-card p-8 text-center mt-6">
           <div style={{ fontSize: 36, marginBottom: 12 }}>✓</div>
           <p
@@ -258,75 +644,163 @@ export default function HousekeepingClient({
         </div>
       )}
 
-      {/* ─── Room accordion ─── */}
-      <div className="space-y-3">
-        {visibleRooms.map((room) => (
-          <RoomAccordion
-            key={room.id}
-            room={room}
-            dueTasks={dueByRoom.get(room.id) ?? []}
-            completions={completionsByRoom.get(room.id) ?? []}
-            isExpanded={expandedRooms.has(room.id)}
-            onToggle={() => toggleRoom(room.id)}
-            canTick={canTick}
-          />
-        ))}
-      </div>
+      {/* Floor groups */}
+      {orderedFloors.map((floor) => {
+        const floorRooms = roomsByFloor.get(floor) ?? []
+        return (
+          <section key={floor} className="fg-floor-group">
+            <h2 className="fg-floor-heading">
+              {floorLabel(floor)}
+            </h2>
+            <div className="space-y-3">
+              {floorRooms.map((room) => {
+                const isHoverTarget =
+                  hoverIndex?.floor === floor &&
+                  hoverIndex?.insertAtRoomId === room.id
 
-      {/* ─── Toast ─── */}
-      {doneCompletionId && <UndoToast completionId={doneCompletionId} />}
+                return (
+                  <RoomAccordion
+                    key={room.id}
+                    room={room}
+                    floor={floor}
+                    dueTasks={dueByRoom.get(room.id) ?? []}
+                    completions={completionsByRoom.get(room.id) ?? []}
+                    isExpanded={expandedRooms.has(room.id)}
+                    onToggle={() => toggleRoom(room.id)}
+                    canTick={canTick}
+                    sortMode={sortMode}
+                    isDragging={drag?.roomId === room.id}
+                    isHoverTarget={isHoverTarget}
+                    onTick={handleTick}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={handleDragCancel}
+                  />
+                )
+              })}
+            </div>
+          </section>
+        )
+      })}
+
+      {/* Drag ghost */}
+      {drag && (
+        <div
+          className="fg-room-ghost"
+          style={{ left: drag.x, top: drag.y }}
+          aria-hidden
+        >
+          {drag.name}
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          onUndo={toast.completionId ? handleUndo : undefined}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }
 
+// ─── Room accordion ─────────────────────────────────────────────────────
+
 function RoomAccordion({
   room,
+  floor,
   dueTasks,
   completions,
   isExpanded,
   onToggle,
   canTick,
+  sortMode,
+  isDragging,
+  isHoverTarget,
+  onTick,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onDragCancel,
 }: {
   room: Room
+  floor: number
   dueTasks: DueTask[]
   completions: Completion[]
   isExpanded: boolean
   onToggle: () => void
   canTick: boolean
+  sortMode: SortMode
+  isDragging: boolean
+  isHoverTarget: boolean
+  onTick: (task: DueTask) => void
+  onDragStart: (e: React.PointerEvent, room: Room) => void
+  onDragMove: (e: React.PointerEvent) => void
+  onDragEnd: (e: React.PointerEvent) => void
+  onDragCancel: (e: React.PointerEvent) => void
 }) {
   const dueCount = dueTasks.length
   const doneCount = completions.length
   const meta = TYPE_META[room.room_type] ?? { icon: '🏠' }
 
   return (
-    <div className="fg-room-card">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="fg-room-header"
-        aria-expanded={isExpanded}
-      >
-        <span
-          className={`fg-room-chevron${isExpanded ? ' is-open' : ''}`}
-          aria-hidden
+    <div
+      data-room-card="1"
+      data-room-id={room.id}
+      data-floor={floor}
+      className={[
+        'fg-room-card',
+        isDragging ? 'is-dragging' : '',
+        isHoverTarget ? 'is-drop-target' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <div className="fg-room-header-wrap">
+        {sortMode === 'custom' && (
+          <div
+            className="fg-room-handle"
+            onPointerDown={(e) => onDragStart(e, room)}
+            onPointerMove={onDragMove}
+            onPointerUp={onDragEnd}
+            onPointerCancel={onDragCancel}
+            title="Drag to reorder"
+            aria-label={`Drag ${room.name}`}
+          >
+            ⋮⋮
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="fg-room-header"
+          aria-expanded={isExpanded}
         >
-          ▸
-        </span>
-        <span style={{ fontSize: 20, marginRight: 4 }}>{meta.icon}</span>
-        <span className="fg-room-name">{room.name}</span>
-        <span className="fg-room-counts">
-          {dueCount > 0 && (
-            <span className="fg-room-badge fg-room-badge-due">
-              {dueCount} due
-            </span>
-          )}
-          {doneCount > 0 && (
-            <span className="fg-room-badge fg-room-badge-done">
-              {doneCount} done
-            </span>
-          )}
-        </span>
-      </button>
+          <span
+            className={`fg-room-chevron${isExpanded ? ' is-open' : ''}`}
+            aria-hidden
+          >
+            ▸
+          </span>
+          <span style={{ fontSize: 20, marginRight: 4 }}>{meta.icon}</span>
+          <span className="fg-room-name">{room.name}</span>
+          <span className="fg-room-counts">
+            {dueCount > 0 && (
+              <span className="fg-room-badge fg-room-badge-due">
+                {dueCount} due
+              </span>
+            )}
+            {doneCount > 0 && (
+              <span className="fg-room-badge fg-room-badge-done">
+                {doneCount} done
+              </span>
+            )}
+          </span>
+        </button>
+      </div>
 
       {isExpanded && (
         <div className="fg-room-body">
@@ -342,6 +816,7 @@ function RoomAccordion({
                   daysOverdue={task.days_overdue}
                   frequencyDays={task.frequency_days}
                   canTick={canTick}
+                  onTick={() => onTick(task)}
                 />
               ))}
             </div>
@@ -384,6 +859,7 @@ function CompletedSection({ completions }: { completions: Completion[] }) {
       {expanded && (
         <div className="px-3 pb-3 pt-1 space-y-1">
           {completions.map((c) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const taskName = (c.task_templates as any)?.name ?? '(deleted task)'
             const time = new Date(c.completed_at).toLocaleTimeString('en-GB', {
               hour: '2-digit',

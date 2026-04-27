@@ -1044,3 +1044,82 @@ button, a, label, input[type="checkbox"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* =====================================================================
+   v8 — Housekeeping floor groupings + custom-order drag
+   ===================================================================== */
+
+.fg-floor-group {
+  margin-bottom: 24px;
+}
+.fg-floor-group:last-child {
+  margin-bottom: 0;
+}
+.fg-floor-heading {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+  margin: 0 0 8px 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-warm);
+}
+
+.fg-room-header-wrap {
+  display: flex;
+  align-items: stretch;
+}
+
+.fg-room-handle {
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  border-right: 1px solid var(--color-warm);
+  background: var(--color-card);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  letter-spacing: -2px;
+  transition: background 0.15s, color 0.15s;
+}
+.fg-room-handle:hover {
+  background: rgba(168, 134, 46, 0.1);
+  color: var(--color-gold);
+}
+.fg-room-handle:active {
+  cursor: grabbing;
+}
+
+.fg-room-card.is-dragging {
+  opacity: 0.4;
+}
+.fg-room-card.is-drop-target {
+  border-top: 3px solid var(--color-gold);
+  margin-top: -3px;
+}
+
+.fg-room-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  background: var(--color-surface);
+  border: 2px solid var(--color-gold);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  padding: 12px 20px;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
