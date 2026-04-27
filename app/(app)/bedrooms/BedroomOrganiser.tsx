@@ -311,7 +311,6 @@ export default function BedroomOrganiser({
       router.refresh()
     })
   }
-  }
 
   // Lock body scroll while dragging on iOS
   useEffect(() => {
