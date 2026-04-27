@@ -44,11 +44,12 @@ export default async function BedroomsPage({
       ? sp.request
       : (requests[0]?.id ?? null)
 
-  // All rooms + their beds — for the visual grid
+  // All bedrooms + their beds — for the visual grid. Other room types
+  // (bathrooms, landings, storage) don't belong in the organiser.
   const { data: roomsRaw } = await supabase
     .from('rooms')
     .select('id, name, floor, room_type, beds(id, name, bed_type)')
-    .neq('room_type', 'global')
+    .eq('room_type', 'bedroom')
     .order('floor', { ascending: false })
     .order('name')
 
