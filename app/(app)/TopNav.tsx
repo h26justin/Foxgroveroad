@@ -44,6 +44,26 @@ export default function TopNav({
     ...(isAdmin
       ? [
           {
+            href: '/bedrooms',
+            label: 'Bedrooms',
+            icon: '🛏',
+            match: '/bedrooms',
+          } satisfies NavItem,
+        ]
+      : []),
+    ...(profile.role === 'admin' || profile.role === 'cleaner'
+      ? [
+          {
+            href: '/linen',
+            label: 'Linen',
+            icon: '🧺',
+            match: '/linen',
+          } satisfies NavItem,
+        ]
+      : []),
+    ...(isAdmin
+      ? [
+          {
             href: '/admin/team',
             label: 'Team',
             icon: '👥',
