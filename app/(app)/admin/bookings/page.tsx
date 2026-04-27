@@ -2,15 +2,30 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import {
-  formatDate,
   formatDateRange,
-  nightsBetween,
   relativeFromToday,
   todayISO,
 } from '@/lib/dates'
 import { approveRequest, declineRequest } from './actions'
+import BookingsCalendar from './BookingsCalendar'
 
-const DAYS_VISIBLE = 30
+/** Return YYYY-MM-01 for the month containing the given ISO date. */
+function firstOfMonthISO(iso: string): string {
+  const d = new Date(iso + 'T00:00:00')
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+}
+
+/** Add ±N months to a YYYY-MM-01 date. */
+function addMonthsISO(iso: string, delta: number): string {
+  const d = new Date(iso + 'T00:00:00')
+  return new Date(d.getFullYear(), d.getMonth() + delta, 1).toISOString().slice(0, 10)
+}
+
+/** Number of days in the month containing the given YYYY-MM-01 date. */
+function daysInMonthISO(iso: string): number {
+  const d = new Date(iso + 'T00:00:00')
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+}
 
 export default async function AdminBookingsPage({
   searchParams,
@@ -19,14 +34,18 @@ export default async function AdminBookingsPage({
     start?: string
     approved?: string
     declined?: string
+    moved?: string
+    error?: string
   }>
 }) {
   await requireAdmin()
   const supabase = await createClient()
-  const { start, approved, declined } = await searchParams
+  const { start, approved, declined, moved, error } = await searchParams
 
-  const startISO = start || todayISO()
+  // Always snap to the first of a month — the page is now month-based.
+  const startISO = firstOfMonthISO(start || todayISO())
   const startDateObj = new Date(startISO + 'T00:00:00')
+  const DAYS_VISIBLE = daysInMonthISO(startISO)
 
   const days: string[] = []
   for (let i = 0; i < DAYS_VISIBLE; i++) {
@@ -36,16 +55,13 @@ export default async function AdminBookingsPage({
   }
   const endISO = days[days.length - 1]
 
-  const prevStart = (() => {
-    const d = new Date(startDateObj)
-    d.setDate(d.getDate() - DAYS_VISIBLE)
-    return d.toISOString().slice(0, 10)
-  })()
-  const nextStart = (() => {
-    const d = new Date(startDateObj)
-    d.setDate(d.getDate() + DAYS_VISIBLE)
-    return d.toISOString().slice(0, 10)
-  })()
+  const prevStart = addMonthsISO(startISO, -1)
+  const nextStart = addMonthsISO(startISO, +1)
+  const thisMonthStart = firstOfMonthISO(todayISO())
+  const monthLabel = startDateObj.toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+  })
 
   // Rooms (for the row labels) — only bedrooms; other rooms (kitchen, bathrooms, etc.)
   // exist for the cleaning rota but aren't bookable
@@ -157,7 +173,7 @@ export default async function AdminBookingsPage({
           Bookings calendar
         </h1>
         <p className="text-sm fg-mono" style={{ color: 'var(--color-muted)' }}>
-          {formatDate(days[0])} → {formatDate(days[days.length - 1])}
+          {monthLabel}
         </p>
       </div>
 
@@ -165,37 +181,40 @@ export default async function AdminBookingsPage({
         <div className="fg-msg-success mb-6">Request approved.</div>
       )}
       {declined && <div className="fg-msg-success mb-6">Request declined.</div>}
+      {moved && <div className="fg-msg-success mb-6">Booking moved.</div>}
+      {error && <div className="fg-msg-error mb-6">{error}</div>}
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/admin/bookings?start=${prevStart}`}
             className="fg-btn-ghost text-sm"
           >
-            ← Previous {DAYS_VISIBLE} days
+            ← Previous month
           </Link>
           <Link
-            href={`/admin/bookings?start=${todayISO()}`}
+            href={`/admin/bookings?start=${thisMonthStart}`}
             className="fg-btn-ghost text-sm"
           >
-            Today
+            This month
           </Link>
           <Link
             href={`/admin/bookings?start=${nextStart}`}
             className="fg-btn-ghost text-sm"
           >
-            Next {DAYS_VISIBLE} days →
+            Next month →
           </Link>
         </div>
       </div>
 
-      <Calendar
+      <BookingsCalendar
         days={days}
-        rooms={rooms ?? []}
-        pending={pendingVisible}
-        approvedUnassigned={approvedUnassigned}
-        bookingsByRoom={bookingsByRoom}
+        rooms={(rooms as any[]) ?? []}
+        pending={pendingVisible as any[]}
+        approvedUnassigned={approvedUnassigned as any[]}
+        bookingsByRoom={Object.fromEntries(bookingsByRoom)}
         startISO={startISO}
+        currentMonthStart={startISO}
       />
 
       {/* Approved waiting for bed assignment */}
@@ -246,342 +265,6 @@ export default async function AdminBookingsPage({
         </section>
       )}
     </div>
-  )
-}
-
-// ---------- Calendar grid ----------
-
-function Calendar({
-  days,
-  rooms,
-  pending,
-  approvedUnassigned,
-  bookingsByRoom,
-  startISO,
-}: any) {
-  const totalDays = days.length
-  const dayWidthPx = 36
-
-  return (
-    <div className="fg-card overflow-x-auto" style={{ padding: 0 }}>
-      <div
-        className="relative"
-        style={{ minWidth: `${260 + totalDays * dayWidthPx}px` }}
-      >
-        {/* Header */}
-        <div
-          className="flex border-b"
-          style={{ borderColor: 'var(--color-warm)' }}
-        >
-          <div
-            className="shrink-0 px-4 py-3 fg-section-label flex items-center"
-            style={{ width: 260 }}
-          >
-            Date →
-          </div>
-          <div className="flex flex-1">
-            {days.map((iso: string, idx: number) => (
-              <DayHeader
-                key={iso}
-                iso={iso}
-                showMonth={idx === 0 || iso.endsWith('-01')}
-                widthPx={dayWidthPx}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Pending lane */}
-        <Lane
-          label={`Pending (${pending.length})`}
-          sublabel="awaiting your review"
-          requests={pending}
-          startISO={startISO}
-          totalDays={totalDays}
-          dayWidthPx={dayWidthPx}
-          color="amber"
-        />
-
-        {/* Approved-unassigned lane */}
-        <Lane
-          label={`Approved (${approvedUnassigned.length})`}
-          sublabel="needs bed assignment"
-          requests={approvedUnassigned}
-          startISO={startISO}
-          totalDays={totalDays}
-          dayWidthPx={dayWidthPx}
-          color="green"
-          showAssignLink
-        />
-
-        <div
-          className="border-t-2"
-          style={{ borderColor: 'var(--color-warm)' }}
-        />
-
-        {/* Room rows */}
-        {rooms.map((room: any) => (
-          <RoomRow
-            key={room.id}
-            room={room}
-            days={days}
-            dayWidthPx={dayWidthPx}
-            bookings={bookingsByRoom.get(room.id) ?? []}
-            startISO={startISO}
-            totalDays={totalDays}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function DayHeader({ iso, showMonth, widthPx }: any) {
-  const date = new Date(iso + 'T00:00:00')
-  const day = date.getDate()
-  const dow = date.toLocaleDateString('en-GB', { weekday: 'short' })[0]
-  const isToday = iso === todayISO()
-  const isWeekend = date.getDay() === 0 || date.getDay() === 6
-  const monthLabel = date.toLocaleDateString('en-GB', { month: 'short' })
-
-  return (
-    <div
-      className="shrink-0 text-center py-2 border-r relative"
-      style={{
-        width: widthPx,
-        borderColor: 'var(--color-warm)',
-        background: isWeekend ? 'var(--color-cream)' : 'transparent',
-      }}
-    >
-      {showMonth && (
-        <div
-          className="absolute top-0 left-1 text-[10px] fg-mono uppercase"
-          style={{ color: 'var(--color-gold)' }}
-        >
-          {monthLabel}
-        </div>
-      )}
-      <div
-        className="text-[10px] fg-mono"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        {dow}
-      </div>
-      <div
-        className="text-sm"
-        style={{
-          color: isToday ? 'var(--color-gold)' : 'var(--color-ink)',
-          fontWeight: isToday ? 700 : 400,
-        }}
-      >
-        {day}
-      </div>
-    </div>
-  )
-}
-
-function Lane({
-  label,
-  sublabel,
-  requests,
-  startISO,
-  totalDays,
-  dayWidthPx,
-  color,
-  showAssignLink = false,
-}: any) {
-  return (
-    <div
-      className="flex border-b items-stretch"
-      style={{ borderColor: 'var(--color-warm)' }}
-    >
-      <div className="shrink-0 px-4 py-3" style={{ width: 260 }}>
-        <div
-          className="text-sm"
-          style={{
-            fontFamily: 'var(--font-serif)',
-            color: 'var(--color-ink)',
-          }}
-        >
-          {label}
-        </div>
-        <div
-          className="text-[10px] fg-mono"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {sublabel}
-        </div>
-      </div>
-      <div
-        className="relative flex-1"
-        style={{ minHeight: 56, width: totalDays * dayWidthPx }}
-      >
-        {Array.from({ length: totalDays }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute top-0 bottom-0 border-r"
-            style={{
-              left: i * dayWidthPx,
-              width: dayWidthPx,
-              borderColor: 'var(--color-warm)',
-              opacity: 0.5,
-            }}
-          />
-        ))}
-        {requests.map((req: any) => (
-          <RequestBar
-            key={req.id}
-            request={req}
-            startISO={startISO}
-            totalDays={totalDays}
-            dayWidthPx={dayWidthPx}
-            color={color}
-            assignLink={showAssignLink}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function RoomRow({ room, days, dayWidthPx, bookings, startISO, totalDays }: any) {
-  return (
-    <div
-      className="flex border-b items-stretch"
-      style={{ borderColor: 'var(--color-warm)' }}
-    >
-      <div className="shrink-0 px-4 py-3" style={{ width: 260 }}>
-        <div
-          className="text-sm"
-          style={{
-            fontFamily: 'var(--font-serif)',
-            color: 'var(--color-ink)',
-          }}
-        >
-          {room.name}
-        </div>
-        <div
-          className="text-[10px] fg-mono"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {room.is_owner_room
-            ? 'owner only'
-            : `${room.floor === 0 ? 'garden' : room.floor === 1 ? '1st' : 'attic'} floor`}
-        </div>
-      </div>
-      <div
-        className="relative flex-1"
-        style={{ minHeight: 56, width: days.length * dayWidthPx }}
-      >
-        {Array.from({ length: days.length }).map((_, i) => {
-          const isWeekend = (() => {
-            const d = new Date(days[i] + 'T00:00:00')
-            return d.getDay() === 0 || d.getDay() === 6
-          })()
-          return (
-            <div
-              key={i}
-              className="absolute top-0 bottom-0 border-r"
-              style={{
-                left: i * dayWidthPx,
-                width: dayWidthPx,
-                borderColor: 'var(--color-warm)',
-                opacity: 0.5,
-                background: isWeekend ? 'var(--color-cream)' : 'transparent',
-              }}
-            />
-          )
-        })}
-        {bookings.map((b: any) => (
-          <BookingBar
-            key={b.id}
-            booking={b}
-            startISO={startISO}
-            totalDays={totalDays}
-            dayWidthPx={dayWidthPx}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function RequestBar({
-  request,
-  startISO,
-  totalDays,
-  dayWidthPx,
-  color,
-  assignLink,
-}: any) {
-  const startOffset = nightsBetween(startISO, request.check_in)
-  const endOffset = nightsBetween(startISO, request.check_out)
-  const visibleStart = Math.max(0, startOffset)
-  const visibleEnd = Math.min(totalDays, endOffset)
-  if (visibleEnd <= visibleStart) return null
-
-  const leftPx = visibleStart * dayWidthPx
-  const widthPx = (visibleEnd - visibleStart) * dayWidthPx
-  const guestCount = request.adults + request.children
-  const requesterName = (request.profiles as any)?.full_name ?? 'Unknown'
-  const bg = color === 'amber' ? 'var(--color-amber)' : 'var(--color-green)'
-
-  const inner = (
-    <div
-      className="absolute rounded text-xs flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow"
-      style={{
-        left: leftPx + 2,
-        width: widthPx - 4,
-        top: 8,
-        height: 40,
-        background: bg,
-        color: 'white',
-        fontWeight: 500,
-        cursor: assignLink ? 'pointer' : 'default',
-      }}
-      title={`${requesterName} · ${formatDateRange(request.check_in, request.check_out)} · ${guestCount} guest${guestCount === 1 ? '' : 's'}${request.notes ? `\nNotes: ${request.notes}` : ''}${assignLink ? '\n\nClick to assign beds' : ''}`}
-    >
-      <span className="truncate">
-        {requesterName} · {guestCount}p
-      </span>
-    </div>
-  )
-
-  if (assignLink) {
-    return <Link href={`/admin/bookings/${request.id}/assign`}>{inner}</Link>
-  }
-  return inner
-}
-
-function BookingBar({ booking, startISO, totalDays, dayWidthPx }: any) {
-  const startOffset = nightsBetween(startISO, booking.check_in)
-  const endOffset = nightsBetween(startISO, booking.check_out)
-  const visibleStart = Math.max(0, startOffset)
-  const visibleEnd = Math.min(totalDays, endOffset)
-  if (visibleEnd <= visibleStart) return null
-
-  const leftPx = visibleStart * dayWidthPx
-  const widthPx = (visibleEnd - visibleStart) * dayWidthPx
-  const name = (booking.profiles as any)?.full_name ?? booking.guest_name
-
-  return (
-    <Link href={`/admin/bookings/${booking.id}`}>
-      <div
-        className="absolute rounded text-xs flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-        style={{
-          left: leftPx + 2,
-          width: widthPx - 4,
-          top: 8,
-          height: 40,
-          background: 'var(--color-green)',
-          color: 'white',
-          fontWeight: 500,
-        }}
-        title={`${name} · ${formatDateRange(booking.check_in, booking.check_out)}\n\nClick to manage`}
-      >
-        <span className="truncate">{name}</span>
-      </div>
-    </Link>
   )
 }
 

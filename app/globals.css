@@ -991,3 +991,56 @@ button, a, label, input[type="checkbox"] {
   min-width: 22px;
   text-align: center;
 }
+
+/* =====================================================================
+   v7bc — Bookings calendar (draggable bars)
+   ===================================================================== */
+
+.fg-booking-bar {
+  position: absolute;
+  background: var(--color-green);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.1s;
+  z-index: 1;
+}
+.fg-booking-bar:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+.fg-booking-bar:active {
+  cursor: grabbing;
+  transform: scale(1.02);
+}
+
+.fg-booking-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  background: var(--color-green);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
