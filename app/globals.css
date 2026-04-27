@@ -1150,3 +1150,51 @@ button, a, label, input[type="checkbox"] {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
   white-space: nowrap;
 }
+
+/* =====================================================================
+   v9 — Booking request form (sharing, children, age bands)
+   ===================================================================== */
+
+.fg-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--color-warm);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--color-surface);
+}
+.fg-radio-row:hover {
+  border-color: var(--color-faint);
+}
+.fg-radio-row[data-checked="1"] {
+  border-color: var(--color-gold);
+  background: rgba(168, 134, 46, 0.08);
+}
+.fg-radio-row input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.fg-radio-label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.fg-child-row {
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.fg-child-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}

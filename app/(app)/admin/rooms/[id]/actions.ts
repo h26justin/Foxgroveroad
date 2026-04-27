@@ -63,3 +63,29 @@ export async function createTaskTemplate(formData: FormData) {
   revalidatePath('/admin/rooms')
   redirect(`${back}?saved=1`)
 }
+
+export async function toggleRoomCotCapacity(formData: FormData) {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const roomId = String(formData.get('room_id') ?? '')
+  const canFitCot = String(formData.get('can_fit_cot') ?? '0') === '1'
+
+  if (!roomId) {
+    redirect(`/admin/rooms?error=${encodeURIComponent('Missing room id')}`)
+  }
+
+  const { error } = await supabase
+    .from('rooms')
+    .update({ can_fit_cot: canFitCot })
+    .eq('id', roomId)
+
+  if (error) {
+    redirect(`/admin/rooms/${roomId}?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath(`/admin/rooms/${roomId}`)
+  revalidatePath('/admin/rooms')
+  revalidatePath('/bedrooms')
+  redirect(`/admin/rooms/${roomId}?saved=1`)
+}

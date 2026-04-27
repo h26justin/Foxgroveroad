@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { createTaskTemplate } from './actions'
+import { createTaskTemplate, toggleRoomCotCapacity } from './actions'
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
   bedroom: { label: 'Bedroom', icon: '🛏' },
@@ -69,7 +69,7 @@ export default async function AdminRoomDetailPage({
 
   const { data: room } = await supabase
     .from('rooms')
-    .select('id, name, floor, room_type, is_owner_room')
+    .select('id, name, floor, room_type, is_owner_room, can_fit_cot')
     .eq('id', id)
     .single()
 
@@ -142,6 +142,69 @@ export default async function AdminRoomDetailPage({
       {saved && <div className="fg-msg-success mb-6">Saved.</div>}
       {deleted && <div className="fg-msg-success mb-6">Task deleted.</div>}
       {error && <div className="fg-msg-error mb-6">{error}</div>}
+
+      {/* Cot capacity toggle — only relevant for bedrooms */}
+      {room.room_type === 'bedroom' && (
+        <section className="mb-8">
+          <h2 className="fg-section-label mb-3">Room facts</h2>
+          <div className="fg-card p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-sm"
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  color: 'var(--color-ink)',
+                }}
+              >
+                Can fit a travel cot?
+              </div>
+              <div
+                className="text-xs fg-mono mt-1"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Used to warn admins when a guest needs a cot but the room
+                they're assigned to is too small for one.
+              </div>
+            </div>
+            <form action={toggleRoomCotCapacity} className="flex gap-2">
+              <input type="hidden" name="room_id" value={room.id} />
+              <input
+                type="hidden"
+                name="can_fit_cot"
+                value={room.can_fit_cot === false ? '1' : '0'}
+              />
+              <button
+                type="submit"
+                className={
+                  room.can_fit_cot === false
+                    ? 'fg-btn-ghost text-xs'
+                    : 'fg-btn-gold text-xs'
+                }
+                style={{ width: 'auto', padding: '8px 14px' }}
+              >
+                {room.can_fit_cot === false
+                  ? 'No → Yes'
+                  : 'Yes → No'}
+              </button>
+              <span
+                className="fg-pill text-xs"
+                style={{
+                  background:
+                    room.can_fit_cot === false
+                      ? 'rgba(204, 51, 51, 0.13)'
+                      : 'rgba(26, 158, 101, 0.13)',
+                  color:
+                    room.can_fit_cot === false
+                      ? 'var(--color-red)'
+                      : 'var(--color-green)',
+                }}
+              >
+                {room.can_fit_cot === false ? 'Too small' : 'Cot OK'}
+              </span>
+            </form>
+          </div>
+        </section>
+      )}
 
       {/* Add new task form — simplified */}
       <section className="mb-10">

@@ -19,10 +19,19 @@ type Request = {
   status: string
   dateLabel: string
   requesterName: string
+  cotCount: number
+  adultsSharing: boolean
 }
 
 type Bed = { id: string; name: string; bed_type: string }
-type Room = { id: string; name: string; floor: number; room_type: string; beds: Bed[] }
+type Room = {
+  id: string
+  name: string
+  floor: number
+  room_type: string
+  can_fit_cot: boolean
+  beds: Bed[]
+}
 
 type Booking = {
   id: string
@@ -227,6 +236,14 @@ export default function BedroomOrganiser({
     : 0
   const assignedCount = bookings.length
 
+  // Cot-warning logic. If the request needs N cots, count how many of the
+  // currently-occupied rooms can physically fit a cot. If we're short,
+  // surface a banner so the admin can re-allocate before guests arrive.
+  const cotsNeeded = selectedRequest?.cotCount ?? 0
+  const cotCapableOccupiedRooms = rooms
+    .filter((r) => occupiedRoomIds.has(r.id) && r.can_fit_cot !== false).length
+  const cotShortfall = Math.max(0, cotsNeeded - cotCapableOccupiedRooms)
+
   // Group rooms by floor
   const byFloor = new Map<number, Room[]>()
   for (const r of rooms) {
@@ -318,6 +335,23 @@ export default function BedroomOrganiser({
       {errorMessage && <div className="fg-msg-error mb-4">{errorMessage}</div>}
       {localError && <div className="fg-msg-error mb-4">{localError}</div>}
 
+      {/* Cot-shortfall warning */}
+      {cotShortfall > 0 && (
+        <div
+          className="fg-msg-error mb-4"
+          style={{
+            background: 'rgba(181, 114, 10, 0.08)',
+            borderColor: 'rgba(181, 114, 10, 0.3)',
+            color: 'var(--color-amber)',
+          }}
+        >
+          ⚠️ This booking needs {cotsNeeded} cot{cotsNeeded === 1 ? '' : 's'},
+          but only {cotCapableOccupiedRooms} of the currently-assigned rooms
+          can physically fit one. Move a guest to a cot-capable room or mark
+          more rooms as cot-capable in admin.
+        </div>
+      )}
+
       {/* ─── Request picker ─── */}
       <div className="fg-card p-4 mb-5">
         <label className="fg-label">Booking to organise</label>
@@ -336,22 +370,35 @@ export default function BedroomOrganiser({
           ))}
         </select>
         {selectedRequest && (
-          <div
-            className="text-xs fg-mono mt-3 flex items-center gap-3 flex-wrap"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            <span>
-              {assignedCount} of {totalSlots || '?'} assigned
-            </span>
-            <button
-              type="button"
-              onClick={handleAddGuest}
+          <>
+            {/* Sleeping summary */}
+            <div
+              className="text-xs fg-mono mt-3"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              {selectedRequest.adults === 1
+                ? '1 adult'
+                : `${selectedRequest.adults} adults — ${selectedRequest.adultsSharing ? 'sharing' : 'separate beds'}`}
+              {cotsNeeded > 0 &&
+                ` · ${cotsNeeded} cot${cotsNeeded === 1 ? '' : 's'} (guest brings)`}
+            </div>
+            <div
+              className="text-xs fg-mono mt-2 flex items-center gap-3 flex-wrap"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              <span>
+                {assignedCount} of {totalSlots || '?'} assigned
+              </span>
+              <button
+                type="button"
+                onClick={handleAddGuest}
               className="fg-btn-gold text-xs"
               style={{ width: 'auto', padding: '8px 14px' }}
             >
               + Add guest
             </button>
           </div>
+          </>
         )}
       </div>
 

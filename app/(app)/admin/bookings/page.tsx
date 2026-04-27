@@ -121,7 +121,7 @@ export default async function AdminBookingsPage({
   const { data: allPending } = await supabase
     .from('booking_requests')
     .select(
-      'id, check_in, check_out, adults, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      'id, check_in, check_out, adults, adults_sharing, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name), booking_request_children(id, age_band, sleep_arrangement, position)'
     )
     .eq('status', 'pending')
     .order('check_in', { ascending: true })
@@ -301,6 +301,24 @@ function PendingCard({ req }: any) {
   const requesterName = (req.profiles as any)?.full_name ?? 'Unknown family member'
   const isPast = req.check_out < todayISO()
 
+  // Build a human-readable sleeping summary
+  const childRows: any[] = req.booking_request_children ?? []
+  const cotCount = childRows.filter((c) => c.sleep_arrangement === 'cot').length
+  const ownBedCount = childRows.filter((c) => c.sleep_arrangement === 'own_bed').length
+  const sharingCount = childRows.filter((c) => c.sleep_arrangement === 'sharing_with_parent').length
+
+  const adultsLine =
+    req.adults === 1
+      ? '1 adult'
+      : req.adults_sharing === false
+        ? `${req.adults} adults — separate beds`
+        : `${req.adults} adults — sharing`
+
+  const childParts: string[] = []
+  if (ownBedCount > 0) childParts.push(`${ownBedCount} child${ownBedCount === 1 ? '' : 'ren'} in own bed${ownBedCount === 1 ? '' : 's'}`)
+  if (sharingCount > 0) childParts.push(`${sharingCount} child${sharingCount === 1 ? '' : 'ren'} sharing with parent`)
+  if (cotCount > 0) childParts.push(`${cotCount} cot${cotCount === 1 ? '' : 's'} (guest brings)`)
+
   return (
     <div className="fg-card-elevated p-5">
       <div className="flex items-start justify-between gap-4 mb-4">
@@ -326,12 +344,19 @@ function PendingCard({ req }: any) {
             className="text-xs fg-mono"
             style={{ color: 'var(--color-muted)' }}
           >
-            {req.adults} adult{req.adults === 1 ? '' : 's'}
-            {req.children > 0 &&
-              `, ${req.children} child${req.children === 1 ? '' : 'ren'}`}
+            {adultsLine}
+            {childParts.length > 0 && ` · ${childParts.join(' · ')}`}
             {' · check-in '}
             {relativeFromToday(req.check_in)}
           </div>
+          {cotCount > 0 && (
+            <div
+              className="text-xs fg-mono mt-2"
+              style={{ color: 'var(--color-amber)' }}
+            >
+              ⚠️ {cotCount} cot{cotCount === 1 ? '' : 's'} needed — assign to a room with cot space.
+            </div>
+          )}
           {req.notes && (
             <p
               className="text-sm mt-3 px-3 py-2 rounded-md"

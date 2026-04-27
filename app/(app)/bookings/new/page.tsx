@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { todayISO } from '@/lib/dates'
-import { createBookingRequest } from './actions'
+import RequestForm from './RequestForm'
 
 export default async function NewBookingPage({
   searchParams,
@@ -41,7 +41,8 @@ export default async function NewBookingPage({
           className="text-sm fg-mono"
           style={{ color: 'var(--color-muted)' }}
         >
-          Pick your dates and group size. We'll confirm the bedrooms once approved.
+          Pick your dates and tell us about your group. We'll confirm the
+          bedrooms once approved.
         </p>
       </div>
 
@@ -64,94 +65,7 @@ export default async function NewBookingPage({
 
       {error && <div className="fg-msg-error mb-6">{error}</div>}
 
-      <form action={createBookingRequest} className="space-y-6 fg-card p-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="check_in" className="fg-label">
-              Check-in
-            </label>
-            <input
-              id="check_in"
-              name="check_in"
-              type="date"
-              required
-              min={today}
-              defaultValue={today}
-              className="fg-input"
-            />
-          </div>
-          <div>
-            <label htmlFor="check_out" className="fg-label">
-              Check-out
-            </label>
-            <input
-              id="check_out"
-              name="check_out"
-              type="date"
-              required
-              min={tomorrow}
-              defaultValue={tomorrow}
-              className="fg-input"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="adults" className="fg-label">
-              Adults
-            </label>
-            <input
-              id="adults"
-              name="adults"
-              type="number"
-              required
-              min={1}
-              max={20}
-              defaultValue={2}
-              className="fg-input"
-            />
-          </div>
-          <div>
-            <label htmlFor="children" className="fg-label">
-              Children
-            </label>
-            <input
-              id="children"
-              name="children"
-              type="number"
-              required
-              min={0}
-              max={20}
-              defaultValue={0}
-              className="fg-input"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="notes" className="fg-label">
-            Notes <span style={{ color: 'var(--color-muted)' }}>(optional)</span>
-          </label>
-          <textarea
-            id="notes"
-            name="notes"
-            rows={3}
-            placeholder="Anything we should know? Anniversary trip, kids prefer ground floor, etc."
-            className="fg-input"
-            maxLength={500}
-          />
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <button type="submit" className="fg-btn-primary">
-            Submit request
-          </button>
-          <Link href="/bookings" className="fg-btn-ghost">
-            Cancel
-          </Link>
-        </div>
-      </form>
+      <RequestForm today={today} tomorrow={tomorrow} />
     </div>
   )
 }

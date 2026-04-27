@@ -20,7 +20,7 @@ export default async function BedroomsPage({
   const { data: requestsRaw } = await supabase
     .from('booking_requests')
     .select(
-      'id, check_in, check_out, adults, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      'id, check_in, check_out, adults, adults_sharing, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name), booking_request_children(id, age_band, sleep_arrangement, position)'
     )
     .eq('status', 'approved')
     .gte('check_out', today)
@@ -29,11 +29,18 @@ export default async function BedroomsPage({
   const requests = (requestsRaw as any[]) ?? []
 
   // Pre-format dates server-side; client doesn't need formatDateRange.
-  const requestsWithLabels = requests.map((r) => ({
-    ...r,
-    dateLabel: formatDateRange(r.check_in, r.check_out),
-    requesterName: (r.profiles as any)?.full_name ?? 'Family guest',
-  }))
+  // Also derive cot count up-front so the client can show warnings.
+  const requestsWithLabels = requests.map((r) => {
+    const childRows: any[] = r.booking_request_children ?? []
+    const cotCount = childRows.filter((c) => c.sleep_arrangement === 'cot').length
+    return {
+      ...r,
+      dateLabel: formatDateRange(r.check_in, r.check_out),
+      requesterName: (r.profiles as any)?.full_name ?? 'Family guest',
+      cotCount,
+      adultsSharing: r.adults_sharing !== false, // null/undef defaults to true
+    }
+  })
 
   // The currently-selected request. If the URL has a stale request ID
   // (cancelled/past booking that's no longer in the approved-upcoming list),
@@ -48,7 +55,7 @@ export default async function BedroomsPage({
   // (bathrooms, landings, storage) don't belong in the organiser.
   const { data: roomsRaw } = await supabase
     .from('rooms')
-    .select('id, name, floor, room_type, beds(id, name, bed_type)')
+    .select('id, name, floor, room_type, can_fit_cot, beds(id, name, bed_type)')
     .eq('room_type', 'bedroom')
     .order('floor', { ascending: false })
     .order('name')
