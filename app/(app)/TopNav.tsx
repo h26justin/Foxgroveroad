@@ -82,8 +82,13 @@ export default function TopNav({
   return (
     <header className="fg-topnav">
       <div className="fg-topnav-inner">
-        <Link href="/housekeeping" className="fg-topnav-logo">
-          <span style={{ fontSize: 20 }}>🏠</span>
+        <Link href="/housekeeping" className="fg-topnav-logo" aria-label="Foxgrove Road home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-foxgrove-mark.png"
+            alt=""
+            className="fg-topnav-logo-img"
+          />
           <span className="fg-topnav-logo-text">Foxgrove Road</span>
         </Link>
 

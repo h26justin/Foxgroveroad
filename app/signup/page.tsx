@@ -11,17 +11,17 @@ export default async function SignupPage({
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-[420px]">
-        {/* Logo / wordmark panel — gold tinted for signup */}
-        <div
-          className="mb-6 rounded-2xl border px-8 py-6 text-center transition"
-          style={{
-            background: 'rgba(200, 168, 75, 0.13)',
-            borderColor: 'rgba(200, 168, 75, 0.27)',
-          }}
-        >
-          <h1 className="text-3xl font-bold tracking-tight">Foxgrove Road</h1>
+        {/* Logo + welcome panel — gold tinted for signup */}
+        <div className="mb-6 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-foxgrove.png"
+            alt="34 Foxgrove"
+            className="mx-auto"
+            style={{ width: 240, height: 'auto', display: 'block' }}
+          />
           <p
-            className="fg-mono mt-2 text-[11px] font-semibold tracking-wider"
+            className="fg-mono mt-3 text-[11px] font-semibold tracking-wider"
             style={{ color: '#8A6A00' }}
           >
             ✨ Welcome — set up your account

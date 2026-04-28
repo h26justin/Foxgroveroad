@@ -11,10 +11,16 @@ export default async function LoginPage({
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-[420px]">
-        {/* Logo / wordmark panel */}
-        <div className="mb-6 rounded-2xl px-8 py-6 text-center">
-          <h1 className="text-3xl font-bold tracking-tight">Foxgrove Road</h1>
-          <p className="fg-mono mt-2 text-xs text-[color:var(--color-muted)]">
+        {/* Logo */}
+        <div className="mb-6 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-foxgrove.png"
+            alt="34 Foxgrove"
+            className="mx-auto"
+            style={{ width: 240, height: 'auto', display: 'block' }}
+          />
+          <p className="fg-mono mt-3 text-xs text-[color:var(--color-muted)]">
             House operations
           </p>
         </div>

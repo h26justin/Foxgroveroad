@@ -297,10 +297,17 @@ button, a, label, input[type="checkbox"] {
 .fg-topnav-logo {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   text-decoration: none;
   flex-shrink: 0;
   padding: 4px 6px;
+}
+.fg-topnav-logo-img {
+  height: 36px;
+  width: auto;
+  display: block;
+  /* Slight nudge so the house base aligns visually with text baseline */
+  margin-top: -2px;
 }
 .fg-topnav-logo-text {
   font-family: var(--font-serif);
@@ -311,6 +318,7 @@ button, a, label, input[type="checkbox"] {
 }
 @media (max-width: 640px) {
   .fg-topnav-logo-text { display: none; }
+  .fg-topnav-logo-img { height: 32px; }
 }
 
 .fg-topnav-items {
