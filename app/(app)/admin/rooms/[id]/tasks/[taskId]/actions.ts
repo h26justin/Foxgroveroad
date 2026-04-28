@@ -13,20 +13,28 @@ import { requireAdmin } from '@/lib/auth'
 function parseSchedule(raw: string): {
   isTurnaround: boolean
   frequencyDays: number | null
+  taskKind: 'turnover' | 'recurring' | 'occupied_only' | null
   error?: string
 } {
   if (raw === 'turnaround') {
-    return { isTurnaround: true, frequencyDays: null }
+    return {
+      isTurnaround: true,
+      frequencyDays: null,
+      taskKind: 'turnover',
+    }
   }
   const days = parseInt(raw, 10)
   if (!Number.isFinite(days) || days < 1) {
     return {
       isTurnaround: false,
       frequencyDays: null,
+      taskKind: null,
       error: 'Pick a schedule for the task',
     }
   }
-  return { isTurnaround: false, frequencyDays: days }
+  // For numeric schedules, leave task_kind unchanged on edit (don't
+  // accidentally re-classify a task someone has already set to 'occupied_only').
+  return { isTurnaround: false, frequencyDays: days, taskKind: null }
 }
 
 export async function updateTaskTemplate(formData: FormData) {
@@ -57,15 +65,22 @@ export async function updateTaskTemplate(formData: FormData) {
     redirect(`${back}?error=${encodeURIComponent(sched.error)}`)
   }
 
+  const updatePayload: any = {
+    room_id: newRoomId,
+    name,
+    frequency_days: sched.frequencyDays,
+    is_turnaround: sched.isTurnaround,
+    notes: notesRaw || null,
+  }
+  // If the schedule change implies a kind change (e.g. switching to/from
+  // 'turnaround'), apply it. Numeric schedule changes don't override kind.
+  if (sched.taskKind) {
+    updatePayload.task_kind = sched.taskKind
+  }
+
   const { error } = await supabase
     .from('task_templates')
-    .update({
-      room_id: newRoomId,
-      name,
-      frequency_days: sched.frequencyDays,
-      is_turnaround: sched.isTurnaround,
-      notes: notesRaw || null,
-    })
+    .update(updatePayload)
     .eq('id', taskId)
 
   if (error) {

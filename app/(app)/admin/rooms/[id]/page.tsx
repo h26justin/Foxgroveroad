@@ -2,7 +2,12 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { floorLabel } from '@/lib/floors'
-import { createTaskTemplate, toggleRoomCotCapacity } from './actions'
+import {
+  createTaskTemplate,
+  toggleRoomCotCapacity,
+  bulkUpdateTaskKinds,
+  setLinkedBedroom,
+} from './actions'
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
   bedroom: { label: 'Bedroom', icon: '🛏' },
@@ -63,7 +68,7 @@ export default async function AdminRoomDetailPage({
 
   const { data: room } = await supabase
     .from('rooms')
-    .select('id, name, floor, room_type, is_owner_room, can_fit_cot')
+    .select('id, name, floor, room_type, is_owner_room, can_fit_cot, linked_bedroom_id')
     .eq('id', id)
     .single()
 
@@ -86,11 +91,24 @@ export default async function AdminRoomDetailPage({
 
   const { data: tasks } = await supabase
     .from('task_templates')
-    .select('id, name, frequency_days, notes, is_turnaround')
+    .select('id, name, frequency_days, notes, is_turnaround, task_kind')
     .eq('room_id', id)
     .order('is_turnaround', { ascending: true })
     .order('frequency_days', { ascending: true, nullsFirst: false })
     .order('name')
+
+  // For bathrooms: list of all guest bedrooms to pick a "linked bedroom" from.
+  // Skipped for non-bathrooms.
+  let bedroomOptions: { id: string; name: string }[] = []
+  if (room.room_type === 'bathroom') {
+    const { data: bedrooms } = await supabase
+      .from('rooms')
+      .select('id, name')
+      .eq('room_type', 'bedroom')
+      .eq('is_owner_room', false)
+      .order('name')
+    bedroomOptions = (bedrooms as any[]) ?? []
+  }
 
   const taskList = tasks ?? []
   const typeMeta = TYPE_META[room.room_type] ?? TYPE_META.common
@@ -200,6 +218,41 @@ export default async function AdminRoomDetailPage({
         </section>
       )}
 
+      {/* Bathroom: link to a bedroom so the bathroom inherits its
+          occupancy state (turnover tasks fire when guests leave). */}
+      {room.room_type === 'bathroom' && (
+        <section className="mb-8">
+          <h2 className="fg-section-label mb-3">Linked bedroom</h2>
+          <div className="fg-card p-4">
+            <div className="text-xs fg-mono mb-3" style={{ color: 'var(--color-muted)' }}>
+              Pick the guest bedroom this bathroom belongs to. When guests
+              leave that bedroom, this bathroom&apos;s turnover tasks
+              (e.g. &quot;Replace towels&quot;) will appear in the cleaning
+              list. Leave blank if this bathroom is shared by multiple
+              bedrooms — its tasks will run on their normal schedule.
+            </div>
+            <form action={setLinkedBedroom} className="flex items-center gap-2 flex-wrap">
+              <input type="hidden" name="room_id" value={room.id} />
+              <select
+                name="linked_bedroom_id"
+                defaultValue={room.linked_bedroom_id ?? ''}
+                className="fg-input"
+                style={{ flex: '1 1 200px' }}
+              >
+                <option value="">(not linked — shared bathroom)</option>
+                {bedroomOptions.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <button type="submit" className="fg-btn-gold text-xs"
+                style={{ width: 'auto', padding: '8px 14px' }}>
+                Save link
+              </button>
+            </form>
+          </div>
+        </section>
+      )}
+
       {/* Add new task form — simplified */}
       <section className="mb-10">
         <h2 className="fg-section-label mb-3">Add a task</h2>
@@ -271,52 +324,100 @@ export default async function AdminRoomDetailPage({
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {taskList.map((task) => (
-              <Link
-                key={task.id}
-                href={`/admin/rooms/${room.id}/tasks/${task.id}`}
-                className="fg-card fg-card-hover block p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="text-base"
-                      style={{
-                        fontFamily: 'var(--font-serif)',
-                        color: 'var(--color-ink)',
-                      }}
-                    >
-                      {task.name}
-                    </div>
-                    {task.notes && (
+          <form action={bulkUpdateTaskKinds}>
+            <input type="hidden" name="room_id" value={room.id} />
+
+            <p
+              className="text-xs fg-mono mb-3"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              <strong>Turnover</strong> = appears when guests leave (make
+              bed, water bottle). <strong>Recurring</strong> = on its own
+              schedule regardless. <strong>Occupied-only</strong> = only
+              while guests are in the room (empty bin).
+            </p>
+
+            <div className="space-y-2 mb-4">
+              {taskList.map((task) => (
+                <div key={task.id} className="fg-card p-4">
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1" style={{ minWidth: 200 }}>
                       <div
-                        className="text-xs fg-mono mt-1 line-clamp-2"
+                        className="text-base"
+                        style={{
+                          fontFamily: 'var(--font-serif)',
+                          color: 'var(--color-ink)',
+                        }}
+                      >
+                        {task.name}
+                      </div>
+                      {task.notes && (
+                        <div
+                          className="text-xs fg-mono mt-1 line-clamp-2"
+                          style={{ color: 'var(--color-muted)' }}
+                        >
+                          {task.notes}
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`fg-pill ${
+                            task.is_turnaround
+                              ? 'fg-pill-gold'
+                              : task.frequency_days != null && task.frequency_days <= 2
+                              ? 'fg-pill-red'
+                              : task.frequency_days != null && task.frequency_days <= 7
+                              ? 'fg-pill-amber'
+                              : task.frequency_days != null && task.frequency_days <= 30
+                              ? 'fg-pill-blue'
+                              : 'fg-pill-muted'
+                          } text-xs`}
+                        >
+                          {formatFrequency(task.frequency_days, task.is_turnaround)}
+                        </span>
+                        <Link
+                          href={`/admin/rooms/${room.id}/tasks/${task.id}`}
+                          className="text-xs fg-mono underline-offset-4 hover:underline"
+                          style={{ color: 'var(--color-blue)' }}
+                        >
+                          Edit
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <label
+                        className="text-[10px] fg-mono block mb-1"
                         style={{ color: 'var(--color-muted)' }}
                       >
-                        {task.notes}
-                      </div>
-                    )}
+                        KIND
+                      </label>
+                      <select
+                        name={`kind_${task.id}`}
+                        defaultValue={task.task_kind ?? 'recurring'}
+                        className="fg-input"
+                        style={{ minWidth: 160 }}
+                      >
+                        <option value="turnover">Turnover</option>
+                        <option value="recurring">Recurring</option>
+                        <option value="occupied_only">Occupied-only</option>
+                      </select>
+                    </div>
                   </div>
-                  <span
-                    className={`fg-pill ${
-                      task.is_turnaround
-                        ? 'fg-pill-gold'
-                        : task.frequency_days != null && task.frequency_days <= 2
-                        ? 'fg-pill-red'
-                        : task.frequency_days != null && task.frequency_days <= 7
-                        ? 'fg-pill-amber'
-                        : task.frequency_days != null && task.frequency_days <= 30
-                        ? 'fg-pill-blue'
-                        : 'fg-pill-muted'
-                    } shrink-0 self-start`}
-                  >
-                    {formatFrequency(task.frequency_days, task.is_turnaround)}
-                  </span>
                 </div>
-              </Link>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            <div className="sticky bottom-2 fg-card p-3 flex items-center justify-between gap-3 flex-wrap"
+              style={{ background: 'var(--color-cream)' }}>
+              <span className="text-xs fg-mono" style={{ color: 'var(--color-muted)' }}>
+                Change task kinds above, then save once for the whole room.
+              </span>
+              <button type="submit" className="fg-btn-gold"
+                style={{ width: 'auto', padding: '8px 18px' }}>
+                Save kinds
+              </button>
+            </div>
+          </form>
         )}
       </section>
     </div>
