@@ -7,6 +7,7 @@ import {
   toggleRoomCotCapacity,
   bulkUpdateTaskKinds,
   setLinkedBedroom,
+  setManualTurnover,
 } from './actions'
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
@@ -68,7 +69,7 @@ export default async function AdminRoomDetailPage({
 
   const { data: room } = await supabase
     .from('rooms')
-    .select('id, name, floor, room_type, is_owner_room, can_fit_cot, linked_bedroom_id')
+    .select('id, name, floor, room_type, is_owner_room, can_fit_cot, linked_bedroom_id, manual_turnover_at')
     .eq('id', id)
     .single()
 
@@ -114,6 +115,28 @@ export default async function AdminRoomDetailPage({
   const typeMeta = TYPE_META[room.room_type] ?? TYPE_META.common
   const turnaroundCount = taskList.filter((t) => t.is_turnaround).length
   const scheduledCount = taskList.length - turnaroundCount
+  const turnoverTaskCount = taskList.filter((t) => t.task_kind === 'turnover').length
+  const isGuestBedroom = room.room_type === 'bedroom' && room.is_owner_room === false
+
+  // Is a manual turnover currently active? — i.e. we set manual_turnover_at
+  // and at least one turnover task hasn't yet been ticked since that timestamp.
+  let manualTurnoverActive = false
+  if (room.manual_turnover_at) {
+    const turnoverTaskIds = taskList
+      .filter((t) => t.task_kind === 'turnover')
+      .map((t) => t.id)
+    if (turnoverTaskIds.length > 0) {
+      const { data: completionsSince } = await supabase
+        .from('task_completions')
+        .select('task_template_id')
+        .gte('completed_at', room.manual_turnover_at)
+        .in('task_template_id', turnoverTaskIds)
+      const tickedSet = new Set(
+        ((completionsSince as any[]) ?? []).map((c) => c.task_template_id)
+      )
+      manualTurnoverActive = turnoverTaskIds.some((id) => !tickedSet.has(id))
+    }
+  }
 
   return (
     <div>
@@ -249,6 +272,103 @@ export default async function AdminRoomDetailPage({
                 Save link
               </button>
             </form>
+          </div>
+        </section>
+      )}
+
+      {/* Force-fire turnover — only for guest bedrooms with turnover tasks */}
+      {isGuestBedroom && turnoverTaskCount > 0 && (
+        <section className="mb-8">
+          <h2 className="fg-section-label mb-3">Turnover cleaning</h2>
+          <div
+            className="fg-card p-4"
+            style={
+              manualTurnoverActive
+                ? {
+                    background: 'rgba(168, 134, 46, 0.08)',
+                    borderColor: 'rgba(168, 134, 46, 0.3)',
+                  }
+                : undefined
+            }
+          >
+            {manualTurnoverActive ? (
+              <>
+                <div
+                  className="text-sm mb-1"
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    color: 'var(--color-ink)',
+                  }}
+                >
+                  🛎 Turnover in progress
+                </div>
+                <div
+                  className="text-xs fg-mono mb-3"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  Turnover tasks are showing in the cleaning list. They&apos;ll
+                  disappear automatically once they&apos;re all ticked.
+                  Started{' '}
+                  {room.manual_turnover_at
+                    ? new Date(room.manual_turnover_at).toLocaleString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : ''}
+                  .
+                </div>
+                <form action={setManualTurnover}>
+                  <input type="hidden" name="room_id" value={room.id} />
+                  <input type="hidden" name="action" value="clear" />
+                  <button
+                    type="submit"
+                    className="fg-btn-ghost text-xs"
+                    style={{ width: 'auto', padding: '8px 14px' }}
+                  >
+                    Cancel turnover
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <div
+                  className="text-sm mb-1"
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    color: 'var(--color-ink)',
+                  }}
+                >
+                  Start turnover now
+                </div>
+                <div
+                  className="text-xs fg-mono mb-3"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  Use this if you want to clean the room before guests
+                  actually leave (e.g. they&apos;re out for the day, or you
+                  want to get ahead). The {turnoverTaskCount} turnover task
+                  {turnoverTaskCount === 1 ? '' : 's'} for this room will
+                  appear in the cleaning list immediately and stay there
+                  until ticked.
+                  {room.linked_bedroom_id == null && room.room_type === 'bedroom'
+                    ? ' Linked bathrooms will inherit this trigger.'
+                    : ''}
+                </div>
+                <form action={setManualTurnover}>
+                  <input type="hidden" name="room_id" value={room.id} />
+                  <input type="hidden" name="action" value="fire" />
+                  <button
+                    type="submit"
+                    className="fg-btn-gold text-xs"
+                    style={{ width: 'auto', padding: '8px 14px' }}
+                  >
+                    🛎 Start turnover now
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </section>
       )}

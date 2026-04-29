@@ -17,7 +17,7 @@ export default async function HousekeepingPage({
   const { data: dueRowsRaw } = await supabase
     .from('cleaner_tasks_today')
     .select(
-      'id, name, notes, frequency_days, is_turnaround, room_id, room_name, floor, room_type, last_completed_date, status, days_overdue'
+      'id, name, notes, frequency_days, is_turnaround, task_kind, room_id, room_name, floor, room_type, last_completed_date, room_state, status, days_overdue'
     )
     .in('status', ['overdue', 'due'])
     .order('days_overdue', { ascending: false })

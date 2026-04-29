@@ -18,11 +18,13 @@ type DueTask = {
   notes: string | null
   frequency_days: number | null
   is_turnaround: boolean
+  task_kind: 'turnover' | 'recurring' | 'occupied_only'
   room_id: string
   room_name: string
   floor: number
   room_type: string
   last_completed_date: string | null
+  room_state: 'occupied' | 'just_vacated' | 'idle'
   status: 'overdue' | 'due' | 'scheduled' | 'turnaround' | 'no_schedule'
   days_overdue: number | null
 }
@@ -876,6 +878,7 @@ function RoomAccordion({
                   status={task.status}
                   daysOverdue={task.days_overdue}
                   frequencyDays={task.frequency_days}
+                  taskKind={task.task_kind ?? 'recurring'}
                   canTick={canTick}
                   onTick={() => onTick(task)}
                 />

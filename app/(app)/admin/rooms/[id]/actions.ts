@@ -172,3 +172,40 @@ export async function setLinkedBedroom(formData: FormData) {
   revalidatePath('/housekeeping')
   redirect(`/admin/rooms/${roomId}?saved=1`)
 }
+
+/**
+ * Manually fire the turnover for a room. Sets `manual_turnover_at` to NOW,
+ * which the cleaner_tasks_today view treats as a virtual checkout — so
+ * turnover tasks for this room appear in the cleaning list immediately,
+ * even with no recent booking. State self-clears when those tasks are
+ * ticked.
+ *
+ * Also clears `manual_turnover_at` (sets to NULL) when called with action='clear'.
+ */
+export async function setManualTurnover(formData: FormData) {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  const roomId = String(formData.get('room_id') ?? '')
+  const action = String(formData.get('action') ?? 'fire')
+
+  if (!roomId) {
+    redirect(`/admin/rooms?error=${encodeURIComponent('Missing room id')}`)
+  }
+
+  const newValue = action === 'clear' ? null : new Date().toISOString()
+
+  const { error } = await supabase
+    .from('rooms')
+    .update({ manual_turnover_at: newValue })
+    .eq('id', roomId)
+
+  if (error) {
+    redirect(`/admin/rooms/${roomId}?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath(`/admin/rooms/${roomId}`)
+  revalidatePath('/admin/rooms')
+  revalidatePath('/housekeeping')
+  redirect(`/admin/rooms/${roomId}?saved=1`)
+}

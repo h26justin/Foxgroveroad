@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 type TaskStatus = 'overdue' | 'due' | 'scheduled' | 'turnaround' | 'no_schedule'
+type TaskKind = 'turnover' | 'recurring' | 'occupied_only'
 
 export default function TaskRow({
   taskId,
@@ -11,6 +12,7 @@ export default function TaskRow({
   status,
   daysOverdue,
   frequencyDays,
+  taskKind,
   canTick,
   onTick,
 }: {
@@ -20,6 +22,7 @@ export default function TaskRow({
   status: TaskStatus
   daysOverdue: number | null
   frequencyDays: number | null
+  taskKind: TaskKind
   canTick: boolean
   onTick: () => void
 }) {
@@ -74,7 +77,19 @@ export default function TaskRow({
         </div>
       )}
       <div className="fg-taprow-body">
-        <div className="fg-taprow-name">{name}</div>
+        <div className="fg-taprow-name">
+          {name}
+          {taskKind === 'turnover' && (
+            <span className="fg-taprow-kind-pill fg-taprow-kind-turnover">
+              🛎 Turnover
+            </span>
+          )}
+          {taskKind === 'occupied_only' && (
+            <span className="fg-taprow-kind-pill fg-taprow-kind-occupied">
+              🛏 Guest in room
+            </span>
+          )}
+        </div>
         <div className="fg-taprow-meta">
           <span style={statusColor(status)}>
             {describeStatus(status, daysOverdue, frequencyDays)}
