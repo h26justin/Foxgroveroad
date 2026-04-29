@@ -1,7 +1,17 @@
+import { cache } from 'react'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-export async function createClient() {
+/**
+ * Wrapped in React's `cache()` so a single request reuses one Supabase
+ * client instance — saves repeated cookie reads and client construction
+ * across layout + page + helpers.
+ *
+ * Note: the *underlying client* is reused, but per-request it's a fresh
+ * construction (cache() is per-request, not global). This keeps auth
+ * cookies isolated per request, which is what we want.
+ */
+export const createClient = cache(async () => {
   const cookieStore = await cookies()
 
   return createServerClient(
@@ -25,4 +35,4 @@ export async function createClient() {
       },
     }
   )
-}
+})

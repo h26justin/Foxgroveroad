@@ -33,21 +33,20 @@ const STATUS_META: Record<
 }
 
 export default async function AdminRoomsPage() {
-  await requireAdmin()
-  const supabase = await createClient()
+  const [, supabase] = await Promise.all([requireAdmin(), createClient()])
 
-  const { data: rooms } = await supabase
-    .from('rooms')
-    .select(
-      'id, name, floor, room_type, is_owner_room, cleaning_status, beds(id, name, bed_type)'
-    )
-    .order('floor', { ascending: false })
-    .order('name')
-
-  // Pull task counts per room in one query
-  const { data: taskRows } = await supabase
-    .from('task_templates')
-    .select('room_id')
+  const [roomsRes, taskRowsRes] = await Promise.all([
+    supabase
+      .from('rooms')
+      .select(
+        'id, name, floor, room_type, is_owner_room, cleaning_status, beds(id, name, bed_type)'
+      )
+      .order('floor', { ascending: false })
+      .order('name'),
+    supabase.from('task_templates').select('room_id'),
+  ])
+  const rooms = roomsRes.data
+  const taskRows = taskRowsRes.data
 
   const taskCountByRoom = new Map<string, number>()
   for (const r of taskRows ?? []) {

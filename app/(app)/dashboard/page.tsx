@@ -4,62 +4,74 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDateRange, relativeFromToday, todayISO } from '@/lib/dates'
 
 export default async function DashboardPage() {
-  const profile = await requireProfile()
-  const supabase = await createClient()
+  const [profile, supabase] = await Promise.all([
+    requireProfile(),
+    createClient(),
+  ])
   const isAdmin = profile.role === 'admin'
   const today = todayISO()
 
-  // Admin counters
-  let pendingCount = 0
+  // Run admin counters (4 independent queries) and the user's upcoming
+  // bookings (1 query) all in parallel — non-admins skip the counters.
+  const [
+    pendingCountRes,
+    approvedRes,
+    approvedBookingsRes,
+    occupiedCountRes,
+    upcomingRes,
+  ] = await Promise.all([
+    isAdmin
+      ? supabase
+          .from('booking_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending')
+      : Promise.resolve({ count: 0 } as any),
+    isAdmin
+      ? supabase
+          .from('booking_requests')
+          .select('id')
+          .eq('status', 'approved')
+          .gte('check_out', today)
+      : Promise.resolve({ data: [] as any[] }),
+    isAdmin
+      ? supabase
+          .from('bookings')
+          .select('request_id')
+          .eq('status', 'approved')
+          .gte('check_out', today)
+      : Promise.resolve({ data: [] as any[] }),
+    isAdmin
+      ? supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'approved')
+          .lte('check_in', today)
+          .gt('check_out', today)
+      : Promise.resolve({ count: 0 } as any),
+    supabase
+      .from('booking_requests')
+      .select('id, check_in, check_out, adults, children, status, notes')
+      .eq('requested_by', profile.id)
+      .gte('check_out', today)
+      .in('status', ['pending', 'approved'])
+      .order('check_in', { ascending: true })
+      .limit(5),
+  ])
+
+  const pendingCount = pendingCountRes.count ?? 0
+  const occupiedCount = occupiedCountRes.count ?? 0
   let needsAssignmentCount = 0
-  let occupiedCount = 0
-
   if (isAdmin) {
-    const { count: pc } = await supabase
-      .from('booking_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending')
-    pendingCount = pc ?? 0
-
-    // Approved requests with no bookings yet
-    const { data: approved } = await supabase
-      .from('booking_requests')
-      .select('id')
-      .eq('status', 'approved')
-      .gte('check_out', today)
-
-    const { data: bookings } = await supabase
-      .from('bookings')
-      .select('request_id')
-      .eq('status', 'approved')
-      .gte('check_out', today)
-
     const assigned = new Set(
-      (bookings ?? []).map((b) => b.request_id).filter(Boolean) as string[]
+      ((approvedBookingsRes.data as any[]) ?? [])
+        .map((b) => b.request_id)
+        .filter(Boolean) as string[]
     )
-    needsAssignmentCount = (approved ?? []).filter(
+    needsAssignmentCount = ((approvedRes.data as any[]) ?? []).filter(
       (r) => !assigned.has(r.id)
     ).length
-
-    // Currently occupied beds
-    const { count: oc } = await supabase
-      .from('bookings')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'approved')
-      .lte('check_in', today)
-      .gt('check_out', today)
-    occupiedCount = oc ?? 0
   }
-
-  // My upcoming requests
-  const { data: upcoming } = await supabase
-    .from('booking_requests')
-    .select('id, check_in, check_out, adults, children, status, notes')
-    .eq('requested_by', profile.id)
-    .gte('check_out', today)
-    .in('status', ['pending', 'approved'])
-    .order('check_in', { ascending: true })
-    .limit(5)
+  const upcoming = upcomingRes.data
 
   return (
     <div>

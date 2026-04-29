@@ -63,36 +63,88 @@ export default async function AdminBookingsPage({
     year: 'numeric',
   })
 
-  // Rooms (for the row labels) — only bedrooms; other rooms (kitchen, bathrooms, etc.)
-  // exist for the cleaning rota but aren't bookable
-  const { data: rooms } = await supabase
-    .from('rooms')
-    .select('id, name, floor, is_owner_room')
-    .eq('room_type', 'bedroom')
-    .order('floor', { ascending: false })
-    .order('name')
+  // All queries below are independent of each other — fire them in
+  // parallel so the page is bottlenecked by the slowest single query
+  // rather than the sum of all of them. Was: ~7 sequential round trips.
+  const today = todayISO()
+  const [
+    roomsRes,
+    visibleBookingsRes,
+    visibleRequestsRes,
+    allPendingRes,
+    allApprovedRes,
+    anyBookingsRes,
+    recentRes,
+  ] = await Promise.all([
+    // Rooms (for the row labels) — only bedrooms; other rooms (kitchen,
+    // bathrooms, etc.) exist for the cleaning rota but aren't bookable
+    supabase
+      .from('rooms')
+      .select('id, name, floor, is_owner_room')
+      .eq('room_type', 'bedroom')
+      .order('floor', { ascending: false })
+      .order('name'),
+    // Bed-level approved bookings overlapping the visible window
+    supabase
+      .from('bookings')
+      .select(
+        'id, bed_id, check_in, check_out, request_id, guest_name, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
+      )
+      .eq('status', 'approved')
+      .lt('check_in', endISO)
+      .gt('check_out', startISO)
+      .order('check_in'),
+    // Booking requests overlapping the window (pending + approved)
+    supabase
+      .from('booking_requests')
+      .select(
+        'id, check_in, check_out, adults, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      )
+      .lt('check_in', endISO)
+      .gt('check_out', startISO)
+      .in('status', ['pending', 'approved'])
+      .order('check_in'),
+    // Pending requests management list (all of them)
+    supabase
+      .from('booking_requests')
+      .select(
+        'id, check_in, check_out, adults, adults_sharing, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name), booking_request_children(id, age_band, sleep_arrangement, position)'
+      )
+      .eq('status', 'pending')
+      .order('check_in', { ascending: true }),
+    // Approved requests (for "needs bed assignment" list)
+    supabase
+      .from('booking_requests')
+      .select(
+        'id, check_in, check_out, adults, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      )
+      .eq('status', 'approved')
+      .gte('check_out', today)
+      .order('check_in', { ascending: true }),
+    // Approved bed bookings (used to find unassigned approved requests)
+    supabase
+      .from('bookings')
+      .select('request_id')
+      .eq('status', 'approved')
+      .gte('check_out', today),
+    // Recent decisions
+    supabase
+      .from('booking_requests')
+      .select(
+        'id, check_in, check_out, adults, children, status, decided_at, admin_notes, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
+      )
+      .in('status', ['approved', 'declined'])
+      .order('decided_at', { ascending: false })
+      .limit(10),
+  ])
 
-  // Bed-level approved bookings overlapping the visible window
-  const { data: visibleBookings } = await supabase
-    .from('bookings')
-    .select(
-      'id, bed_id, check_in, check_out, request_id, guest_name, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
-    )
-    .eq('status', 'approved')
-    .lt('check_in', endISO)
-    .gt('check_out', startISO)
-    .order('check_in')
-
-  // Booking requests overlapping the window (pending + approved)
-  const { data: visibleRequests } = await supabase
-    .from('booking_requests')
-    .select(
-      'id, check_in, check_out, adults, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
-    )
-    .lt('check_in', endISO)
-    .gt('check_out', startISO)
-    .in('status', ['pending', 'approved'])
-    .order('check_in')
+  const rooms           = roomsRes.data
+  const visibleBookings = visibleBookingsRes.data
+  const visibleRequests = visibleRequestsRes.data
+  const allPending      = allPendingRes.data
+  const allApproved     = allApprovedRes.data
+  const anyBookings     = anyBookingsRes.data
+  const recent          = recentRes.data
 
   const pendingVisible = (visibleRequests ?? []).filter(
     (r) => r.status === 'pending'
@@ -117,48 +169,13 @@ export default async function AdminBookingsPage({
     bookingsByRoom.get(roomId)!.push(b)
   }
 
-  // Pending requests management list (all of them)
-  const { data: allPending } = await supabase
-    .from('booking_requests')
-    .select(
-      'id, check_in, check_out, adults, adults_sharing, children, notes, status, profiles:profiles!booking_requests_requested_by_fkey(full_name), booking_request_children(id, age_band, sleep_arrangement, position)'
-    )
-    .eq('status', 'pending')
-    .order('check_in', { ascending: true })
-
-  // Approved requests (for "needs bed assignment" list)
-  const { data: allApproved } = await supabase
-    .from('booking_requests')
-    .select(
-      'id, check_in, check_out, adults, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
-    )
-    .eq('status', 'approved')
-    .gte('check_out', todayISO())
-    .order('check_in', { ascending: true })
-
   // Find approved requests with no bed bookings yet (need assignment)
-  const { data: anyBookings } = await supabase
-    .from('bookings')
-    .select('request_id')
-    .eq('status', 'approved')
-    .gte('check_out', todayISO())
-
   const assignedRequestIds = new Set(
     (anyBookings ?? []).map((b) => b.request_id).filter(Boolean) as string[]
   )
   const needsAssignment = (allApproved ?? []).filter(
     (r) => !assignedRequestIds.has(r.id)
   )
-
-  // Recent decisions
-  const { data: recent } = await supabase
-    .from('booking_requests')
-    .select(
-      'id, check_in, check_out, adults, children, status, decided_at, admin_notes, profiles:profiles!booking_requests_requested_by_fkey(full_name)'
-    )
-    .in('status', ['approved', 'declined'])
-    .order('decided_at', { ascending: false })
-    .limit(10)
 
   return (
     <div>

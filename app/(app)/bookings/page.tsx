@@ -8,9 +8,12 @@ export default async function BookingsPage({
 }: {
   searchParams: Promise<{ success?: string; cancelled?: string }>
 }) {
-  const profile = await requireProfile()
-  const supabase = await createClient()
-  const { success, cancelled } = await searchParams
+  const [profile, supabase, sp] = await Promise.all([
+    requireProfile(),
+    createClient(),
+    searchParams,
+  ])
+  const { success, cancelled } = sp
 
   // All my requests, newest first by check-in date
   const { data: requests } = await supabase

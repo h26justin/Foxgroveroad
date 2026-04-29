@@ -1,23 +1,29 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
 /**
  * Returns the current Supabase auth user, or null if not signed in.
  * Use this in server components/actions to gate access.
+ *
+ * Wrapped in React's `cache()` so multiple calls within a single request
+ * (e.g. layout + page) share one Supabase round-trip.
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   return user
-}
+})
 
 /**
  * Returns the current user's profile row (id, full_name, role, ...) or null.
  * Most pages should use this rather than getCurrentUser, since the role
  * lives on the profile, not on auth.users.
+ *
+ * Cached per-request so layout + page calls are deduped.
  */
-export async function getCurrentProfile() {
+export const getCurrentProfile = cache(async () => {
   const supabase = await createClient()
 
   const {
@@ -32,7 +38,7 @@ export async function getCurrentProfile() {
     .single()
 
   return profile
-}
+})
 
 /**
  * Throws + redirects to /login if not signed in. Returns the profile.

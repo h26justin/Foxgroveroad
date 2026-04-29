@@ -16,10 +16,14 @@ export default async function BookingDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ error?: string; success?: string }>
 }) {
-  await requireAdmin()
-  const { id } = await params
-  const { error, success } = await searchParams
-  const supabase = await createClient()
+  const [, p, sp, supabase] = await Promise.all([
+    requireAdmin(),
+    params,
+    searchParams,
+    createClient(),
+  ])
+  const { id } = p
+  const { error, success } = sp
 
   const { data: booking } = await supabase
     .from('bookings')

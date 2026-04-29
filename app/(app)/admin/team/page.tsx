@@ -7,21 +7,27 @@ export default async function AdminTeamPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>
 }) {
-  const me = await requireAdmin()
-  const { saved, error } = await searchParams
-  const supabase = await createClient()
+  const [me, sp, supabase] = await Promise.all([
+    requireAdmin(),
+    searchParams,
+    createClient(),
+  ])
+  const { saved, error } = sp
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, full_name, role, phone, created_at')
-    .order('created_at', { ascending: true })
-
-  const { data: cleaners } = await supabase
-    .from('cleaners')
-    .select(
-      'id, name, is_active, profile_id, profiles:profiles!cleaners_profile_id_fkey(full_name)'
-    )
-    .order('name')
+  const [profilesRes, cleanersRes] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, full_name, role, phone, created_at')
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('cleaners')
+      .select(
+        'id, name, is_active, profile_id, profiles:profiles!cleaners_profile_id_fkey(full_name)'
+      )
+      .order('name'),
+  ])
+  const profiles = profilesRes.data
+  const cleaners = cleanersRes.data
 
   // Profiles that could potentially be linked to a cleaner record
   const linkableProfiles = (profiles ?? []).filter(

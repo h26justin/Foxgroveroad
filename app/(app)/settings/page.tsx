@@ -6,8 +6,8 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>
 }) {
-  const profile = await requireProfile()
-  const { saved, error } = await searchParams
+  const [profile, sp] = await Promise.all([requireProfile(), searchParams])
+  const { saved, error } = sp
 
   return (
     <div className="max-w-xl">

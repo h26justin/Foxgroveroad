@@ -11,23 +11,28 @@ export default async function PrearrivalTemplatesPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>
 }) {
-  await requireAdmin()
-  const sp = await searchParams
-  const supabase = await createClient()
+  const [, sp, supabase] = await Promise.all([
+    requireAdmin(),
+    searchParams,
+    createClient(),
+  ])
 
-  const { data: rooms } = await supabase
-    .from('rooms')
-    .select('id, name, floor, room_type')
-    .eq('room_type', 'bedroom')
-    .order('floor', { ascending: false })
-    .order('name')
-
-  const { data: templates } = await supabase
-    .from('prearrival_templates')
-    .select('id, room_id, name, position')
-    .order('room_id')
-    .order('position')
-    .order('name')
+  const [roomsRes, templatesRes] = await Promise.all([
+    supabase
+      .from('rooms')
+      .select('id, name, floor, room_type')
+      .eq('room_type', 'bedroom')
+      .order('floor', { ascending: false })
+      .order('name'),
+    supabase
+      .from('prearrival_templates')
+      .select('id, room_id, name, position')
+      .order('room_id')
+      .order('position')
+      .order('name'),
+  ])
+  const rooms = roomsRes.data
+  const templates = templatesRes.data
 
   const templatesByRoom = new Map<string, any[]>()
   for (const t of templates ?? []) {

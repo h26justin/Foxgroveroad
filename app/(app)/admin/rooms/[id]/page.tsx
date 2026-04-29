@@ -67,11 +67,24 @@ export default async function AdminRoomDetailPage({
   const { saved, deleted, error } = await searchParams
   const supabase = await createClient()
 
-  const { data: room } = await supabase
-    .from('rooms')
-    .select('id, name, floor, room_type, is_owner_room, can_fit_cot, linked_bedroom_id, manual_turnover_at')
-    .eq('id', id)
-    .single()
+  // Stage 1 — room details + task list, both independent.
+  const [roomRes, tasksRes] = await Promise.all([
+    supabase
+      .from('rooms')
+      .select('id, name, floor, room_type, is_owner_room, can_fit_cot, linked_bedroom_id, manual_turnover_at')
+      .eq('id', id)
+      .single(),
+    supabase
+      .from('task_templates')
+      .select('id, name, frequency_days, notes, is_turnaround, task_kind')
+      .eq('room_id', id)
+      .order('is_turnaround', { ascending: true })
+      .order('frequency_days', { ascending: true, nullsFirst: false })
+      .order('name'),
+  ])
+
+  const room = roomRes.data
+  const tasks = tasksRes.data
 
   if (!room) {
     return (
@@ -90,27 +103,6 @@ export default async function AdminRoomDetailPage({
     )
   }
 
-  const { data: tasks } = await supabase
-    .from('task_templates')
-    .select('id, name, frequency_days, notes, is_turnaround, task_kind')
-    .eq('room_id', id)
-    .order('is_turnaround', { ascending: true })
-    .order('frequency_days', { ascending: true, nullsFirst: false })
-    .order('name')
-
-  // For bathrooms: list of all guest bedrooms to pick a "linked bedroom" from.
-  // Skipped for non-bathrooms.
-  let bedroomOptions: { id: string; name: string }[] = []
-  if (room.room_type === 'bathroom') {
-    const { data: bedrooms } = await supabase
-      .from('rooms')
-      .select('id, name')
-      .eq('room_type', 'bedroom')
-      .eq('is_owner_room', false)
-      .order('name')
-    bedroomOptions = (bedrooms as any[]) ?? []
-  }
-
   const taskList = tasks ?? []
   const typeMeta = TYPE_META[room.room_type] ?? TYPE_META.common
   const turnaroundCount = taskList.filter((t) => t.is_turnaround).length
@@ -118,24 +110,38 @@ export default async function AdminRoomDetailPage({
   const turnoverTaskCount = taskList.filter((t) => t.task_kind === 'turnover').length
   const isGuestBedroom = room.room_type === 'bedroom' && room.is_owner_room === false
 
-  // Is a manual turnover currently active? — i.e. we set manual_turnover_at
-  // and at least one turnover task hasn't yet been ticked since that timestamp.
+  // Stage 2 — both depend on stage 1 outcomes but are independent of each other.
+  // - bedroomOptions: only fetch for bathrooms
+  // - completionsSince: only fetch if there's a manual turnover active
+  const turnoverTaskIds = taskList
+    .filter((t) => t.task_kind === 'turnover')
+    .map((t) => t.id)
+  const [bedroomsRes, completionsRes] = await Promise.all([
+    room.room_type === 'bathroom'
+      ? supabase
+          .from('rooms')
+          .select('id, name')
+          .eq('room_type', 'bedroom')
+          .eq('is_owner_room', false)
+          .order('name')
+      : Promise.resolve({ data: [] as any[] }),
+    room.manual_turnover_at && turnoverTaskIds.length > 0
+      ? supabase
+          .from('task_completions')
+          .select('task_template_id')
+          .gte('completed_at', room.manual_turnover_at)
+          .in('task_template_id', turnoverTaskIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+  const bedroomOptions = (bedroomsRes.data as any[]) ?? []
+
+  // Is a manual turnover currently active?
   let manualTurnoverActive = false
-  if (room.manual_turnover_at) {
-    const turnoverTaskIds = taskList
-      .filter((t) => t.task_kind === 'turnover')
-      .map((t) => t.id)
-    if (turnoverTaskIds.length > 0) {
-      const { data: completionsSince } = await supabase
-        .from('task_completions')
-        .select('task_template_id')
-        .gte('completed_at', room.manual_turnover_at)
-        .in('task_template_id', turnoverTaskIds)
-      const tickedSet = new Set(
-        ((completionsSince as any[]) ?? []).map((c) => c.task_template_id)
-      )
-      manualTurnoverActive = turnoverTaskIds.some((id) => !tickedSet.has(id))
-    }
+  if (room.manual_turnover_at && turnoverTaskIds.length > 0) {
+    const tickedSet = new Set(
+      ((completionsRes.data as any[]) ?? []).map((c) => c.task_template_id)
+    )
+    manualTurnoverActive = turnoverTaskIds.some((id) => !tickedSet.has(id))
   }
 
   return (

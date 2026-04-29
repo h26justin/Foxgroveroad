@@ -17,9 +17,12 @@ export default async function HousePage({
 }: {
   searchParams: Promise<{ start?: string }>
 }) {
-  await requireProfile()
-  const supabase = await createClient()
-  const { start } = await searchParams
+  const [, supabase, sp] = await Promise.all([
+    requireProfile(),
+    createClient(),
+    searchParams,
+  ])
+  const { start } = sp
 
   const startISO = start || todayISO()
   const startDateObj = new Date(startISO + 'T00:00:00')
@@ -43,24 +46,26 @@ export default async function HousePage({
     return d.toISOString().slice(0, 10)
   })()
 
-  // Rooms (only bedrooms — non-bedrooms aren't bookable)
-  const { data: rooms } = await supabase
-    .from('rooms')
-    .select('id, name, floor, is_owner_room')
-    .eq('room_type', 'bedroom')
-    .order('floor', { ascending: false })
-    .order('name')
-
-  // Approved bed-level bookings overlapping the visible window
-  const { data: visibleBookings } = await supabase
-    .from('bookings')
-    .select(
-      'id, bed_id, check_in, check_out, guest_name, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
-    )
-    .eq('status', 'approved')
-    .lt('check_in', endISO)
-    .gt('check_out', startISO)
-    .order('check_in')
+  // Both queries are independent — fire in parallel.
+  const [roomsRes, visibleBookingsRes] = await Promise.all([
+    supabase
+      .from('rooms')
+      .select('id, name, floor, is_owner_room')
+      .eq('room_type', 'bedroom')
+      .order('floor', { ascending: false })
+      .order('name'),
+    supabase
+      .from('bookings')
+      .select(
+        'id, bed_id, check_in, check_out, guest_name, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
+      )
+      .eq('status', 'approved')
+      .lt('check_in', endISO)
+      .gt('check_out', startISO)
+      .order('check_in'),
+  ])
+  const rooms = roomsRes.data
+  const visibleBookings = visibleBookingsRes.data
 
   // Group by room
   const bookingsByRoom = new Map<string, any[]>()

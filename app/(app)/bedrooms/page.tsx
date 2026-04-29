@@ -11,22 +11,37 @@ export default async function BedroomsPage({
 }: {
   searchParams: Promise<{ request?: string; saved?: string; error?: string }>
 }) {
-  await requireAdmin()
-  const sp = await searchParams
-  const supabase = await createClient()
+  // Stage 0 — auth + searchParams + supabase client in parallel
+  const [, sp, supabase] = await Promise.all([
+    requireAdmin(),
+    searchParams,
+    createClient(),
+  ])
   const today = new Date().toISOString().split('T')[0]
 
-  // Approved upcoming requests — these are the ones admin can organise.
-  const { data: requestsRaw } = await supabase
-    .from('booking_requests')
-    .select(
-      'id, check_in, check_out, adults, adults_sharing, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name), booking_request_children(id, age_band, sleep_arrangement, position)'
-    )
-    .eq('status', 'approved')
-    .gte('check_out', today)
-    .order('check_in', { ascending: true })
+  // Stage 1 — requests + rooms + templates have no dependencies, fire all three.
+  const [requestsRes, roomsRes, templatesRes] = await Promise.all([
+    supabase
+      .from('booking_requests')
+      .select(
+        'id, check_in, check_out, adults, adults_sharing, children, status, profiles:profiles!booking_requests_requested_by_fkey(full_name), booking_request_children(id, age_band, sleep_arrangement, position)'
+      )
+      .eq('status', 'approved')
+      .gte('check_out', today)
+      .order('check_in', { ascending: true }),
+    supabase
+      .from('rooms')
+      .select('id, name, floor, room_type, can_fit_cot, beds(id, name, bed_type)')
+      .eq('room_type', 'bedroom')
+      .order('floor', { ascending: false })
+      .order('name'),
+    supabase
+      .from('prearrival_templates')
+      .select('id, room_id, name, position')
+      .order('position'),
+  ])
 
-  const requests = (requestsRaw as any[]) ?? []
+  const requests = (requestsRes.data as any[]) ?? []
 
   // Pre-format dates server-side; client doesn't need formatDateRange.
   // Also derive cot count up-front so the client can show warnings.
@@ -51,54 +66,43 @@ export default async function BedroomsPage({
       ? sp.request
       : (requests[0]?.id ?? null)
 
-  // All bedrooms + their beds — for the visual grid. Other room types
-  // (bathrooms, landings, storage) don't belong in the organiser.
-  const { data: roomsRaw } = await supabase
-    .from('rooms')
-    .select('id, name, floor, room_type, can_fit_cot, beds(id, name, bed_type)')
-    .eq('room_type', 'bedroom')
-    .order('floor', { ascending: false })
-    .order('name')
-
-  // Booking rows for the selected request — these are our draggable pills
-  const { data: bookingsRaw } = selectedRequestId
-    ? await supabase
-        .from('bookings')
-        .select('id, bed_id, guest_name, check_in, check_out, request_id')
-        .eq('request_id', selectedRequestId)
-        .order('guest_name')
-    : { data: [] }
-
-  // ALL approved bookings overlapping the selected request's dates,
-  // EXCLUDING those belonging to this request. Used to mark beds that are
-  // already booked by someone else for this date range — the client uses
-  // this to disable those beds as drop targets.
   const selectedRequest = requests.find((r) => r.id === selectedRequestId)
-  const { data: overlappingRaw } = selectedRequest
-    ? await supabase
-        .from('bookings')
-        .select(
-          'id, bed_id, guest_name, check_in, check_out, request_id, profiles:profiles!bookings_requested_by_fkey(full_name)'
-        )
-        .eq('status', 'approved')
-        .lt('check_in', selectedRequest.check_out)
-        .gt('check_out', selectedRequest.check_in)
-        .neq('request_id', selectedRequestId)
-    : { data: [] }
 
-  // Pre-arrival checklist templates per room
-  const { data: templatesRaw } = await supabase
-    .from('prearrival_templates')
-    .select('id, room_id, name, position')
-    .order('position')
+  // Stage 2 — bookings/overlapping/checks all depend on selectedRequestId,
+  // so we fire them after stage 1 — but the three are independent of each
+  // other so they go in parallel.
+  const [bookingsRes, overlappingRes, checksRes] = await Promise.all([
+    selectedRequestId
+      ? supabase
+          .from('bookings')
+          .select('id, bed_id, guest_name, check_in, check_out, request_id')
+          .eq('request_id', selectedRequestId)
+          .order('guest_name')
+      : Promise.resolve({ data: [] as any[] }),
+    selectedRequest
+      ? supabase
+          .from('bookings')
+          .select(
+            'id, bed_id, guest_name, check_in, check_out, request_id, profiles:profiles!bookings_requested_by_fkey(full_name)'
+          )
+          .eq('status', 'approved')
+          .lt('check_in', selectedRequest.check_out)
+          .gt('check_out', selectedRequest.check_in)
+          .neq('request_id', selectedRequestId)
+      : Promise.resolve({ data: [] as any[] }),
+    selectedRequestId
+      ? supabase
+          .from('prearrival_checks')
+          .select('id, template_id, room_id, checked_at, checked_by')
+          .eq('booking_request_id', selectedRequestId)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
 
-  // Existing checks for this booking
-  const { data: checksRaw } = selectedRequestId
-    ? await supabase
-        .from('prearrival_checks')
-        .select('id, template_id, room_id, checked_at, checked_by')
-        .eq('booking_request_id', selectedRequestId)
-    : { data: [] }
+  const roomsRaw = roomsRes.data
+  const templatesRaw = templatesRes.data
+  const bookingsRaw = bookingsRes.data
+  const overlappingRaw = overlappingRes.data
+  const checksRaw = checksRes.data
 
   return (
     <div>
