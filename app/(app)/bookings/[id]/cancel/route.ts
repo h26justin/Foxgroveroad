@@ -25,6 +25,7 @@ export async function POST(
     .eq('status', 'pending')
 
   revalidatePath('/bookings')
+  revalidatePath('/house')
   revalidatePath('/dashboard')
   revalidatePath('/admin/bookings')
 

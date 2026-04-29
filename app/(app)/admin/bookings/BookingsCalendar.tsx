@@ -68,6 +68,7 @@ export default function BookingsCalendar({
   bookingsByRoom,
   startISO,
   currentMonthStart,
+  onBookingTap,
 }: {
   days: string[]
   rooms: Room[]
@@ -76,6 +77,10 @@ export default function BookingsCalendar({
   bookingsByRoom: Record<string, Booking[]>
   startISO: string
   currentMonthStart: string
+  /** When provided, taps on a booking bar call this instead of navigating
+   *  to /admin/bookings/<id>. Used by the House page to open the
+   *  slide-over panel. */
+  onBookingTap?: (bookingId: string) => void
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -361,6 +366,7 @@ export default function BookingsCalendar({
                     }
                   : null
               }
+              onBookingTap={onBookingTap}
             />
           ))}
         </div>
@@ -572,6 +578,7 @@ function RoomRow({
   hoverCellRoomId,
   hoverCellDate,
   dragPreview,
+  onBookingTap,
 }: {
   room: Room
   days: string[]
@@ -586,6 +593,7 @@ function RoomRow({
   hoverCellRoomId: string | null
   hoverCellDate: string | null
   dragPreview: { isThisRoom: boolean; previewStartDate: string; durationDays: number } | null
+  onBookingTap?: (bookingId: string) => void
 }) {
   return (
     <div
@@ -658,6 +666,7 @@ function RoomRow({
             onPointerMove={onPillPointerMove}
             onPointerUp={onPillPointerUp}
             onPointerCancel={onPillPointerCancel}
+            onBookingTap={onBookingTap}
           />
         ))}
       </div>
@@ -707,6 +716,7 @@ function BookingBar({
   onPointerMove,
   onPointerUp,
   onPointerCancel,
+  onBookingTap,
 }: {
   booking: Booking
   startISO: string
@@ -716,6 +726,7 @@ function BookingBar({
   onPointerMove: (e: React.PointerEvent) => void
   onPointerUp: (e: React.PointerEvent) => void
   onPointerCancel: (e: React.PointerEvent) => void
+  onBookingTap?: (bookingId: string) => void
 }) {
   const router = useRouter()
   const startOffset = nightsBetween(startISO, booking.check_in)
@@ -764,7 +775,11 @@ function BookingBar({
         startRef.current = null
         onPointerUp(e)
         if (wasShortTap) {
-          router.push(`/admin/bookings/${booking.id}`)
+          if (onBookingTap) {
+            onBookingTap(booking.id)
+          } else {
+            router.push(`/admin/bookings/${booking.id}`)
+          }
         }
       }}
       onPointerCancel={(e) => {

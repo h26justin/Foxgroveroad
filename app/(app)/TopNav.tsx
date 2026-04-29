@@ -23,34 +23,24 @@ export default function TopNav({
   // Item definition. `match` is the path-prefix that activates the highlight.
   const items: NavItem[] = [
     {
+      href: '/house',
+      label: 'House',
+      icon: '🏘',
+      match: '/house',
+      badge: isAdmin && pendingCount > 0 ? pendingCount : undefined,
+    },
+    {
       href: '/housekeeping',
       label: 'Housekeeping',
       icon: '🧹',
       match: '/housekeeping',
     },
     {
-      href: isAdmin ? '/admin/bookings' : '/bookings',
+      href: '/bookings',
       label: 'Bookings',
       icon: '📅',
-      match: isAdmin ? '/admin/bookings' : '/bookings',
-      badge: isAdmin && pendingCount > 0 ? pendingCount : undefined,
+      match: '/bookings',
     },
-    {
-      href: '/house',
-      label: 'House',
-      icon: '🏘',
-      match: '/house',
-    },
-    ...(isAdmin
-      ? [
-          {
-            href: '/bedrooms',
-            label: 'Bedrooms',
-            icon: '🛏',
-            match: '/bedrooms',
-          } satisfies NavItem,
-        ]
-      : []),
     ...(profile.role === 'admin' || profile.role === 'cleaner'
       ? [
           {
@@ -82,7 +72,7 @@ export default function TopNav({
   return (
     <header className="fg-topnav">
       <div className="fg-topnav-inner">
-        <Link href="/housekeeping" className="fg-topnav-logo" aria-label="Foxgrove Road home">
+        <Link href="/house" className="fg-topnav-logo" aria-label="Foxgrove Road home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo-foxgrove-mark.png"

@@ -43,6 +43,7 @@ export async function addTemplate(formData: FormData) {
   }
 
   revalidatePath('/admin/prearrival-templates')
+  revalidatePath('/house')
   revalidatePath('/bedrooms')
   redirect('/admin/prearrival-templates?saved=1')
 }

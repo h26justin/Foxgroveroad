@@ -1227,3 +1227,294 @@ button, a, label, input[type="checkbox"] {
   justify-content: space-between;
   margin-bottom: 10px;
 }
+
+/* =====================================================================
+   v11 — Unified House page: status strip, slide-over panel
+   ===================================================================== */
+
+/* Status strip — chips horizontally across the top */
+.fg-status-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.fg-status-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+}
+.fg-status-chip-count {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.fg-status-chip-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.fg-status-chip-amber .fg-status-chip-count { color: var(--color-amber); }
+.fg-status-chip-red   .fg-status-chip-count { color: var(--color-red); }
+.fg-status-chip-blue  .fg-status-chip-count { color: var(--color-blue); }
+
+/* Pending request card buttons */
+.fg-pending-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--color-cream);
+  border: 1px solid var(--color-warm);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.fg-pending-card:hover {
+  border-color: var(--color-faint);
+  background: var(--color-card);
+}
+
+/* ─── Slide-over panel ─── */
+.fg-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 35, 36, 0.4);
+  z-index: 90;
+  animation: fg-fade-in 0.15s ease-out;
+}
+@keyframes fg-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fg-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 480px;
+  max-width: 100vw;
+  background: var(--color-cream);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.18);
+  animation: fg-panel-slide-in 0.2s ease-out;
+}
+@keyframes fg-panel-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.fg-panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-warm);
+  background: var(--color-card);
+}
+.fg-panel-close {
+  font-size: 24px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--color-warm);
+  background: var(--color-cream);
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.fg-panel-close:hover {
+  background: var(--color-card);
+  color: var(--color-ink);
+}
+.fg-panel-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0;
+}
+.fg-panel-section {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-warm);
+}
+.fg-panel-room {
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* Bed slots inside the panel */
+.fg-panel-bed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1.5px dashed var(--color-warm);
+  border-radius: 6px;
+  background: var(--color-cream);
+}
+.fg-panel-bed.is-dropzone {
+  border-style: dashed;
+  background: rgba(168, 134, 46, 0.04);
+}
+.fg-panel-bed.is-hovered {
+  border-color: var(--color-gold);
+  border-style: solid;
+  background: rgba(168, 134, 46, 0.12);
+}
+.fg-panel-bed.is-blocked {
+  border-color: rgba(204, 51, 51, 0.2);
+  border-style: solid;
+  background: rgba(204, 51, 51, 0.05);
+  opacity: 0.75;
+}
+.fg-panel-bed-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fg-panel-bed-type {
+  background: var(--color-warm);
+  color: var(--color-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fg-panel-bed-blocked {
+  margin-left: auto;
+  background: rgba(204, 51, 51, 0.13);
+  color: var(--color-red);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fg-panel-bed-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 32px;
+}
+.fg-panel-bed-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  opacity: 0.6;
+}
+
+/* Guest pill inside the panel */
+.fg-panel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(46, 110, 168, 0.13);
+  color: var(--color-blue);
+  border: 1px solid rgba(46, 110, 168, 0.3);
+  border-radius: 999px;
+  padding: 4px 4px 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.fg-panel-pill:active {
+  cursor: grabbing;
+}
+.fg-panel-pill-name {
+  font-weight: 600;
+}
+.fg-panel-pill-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(204, 51, 51, 0.85);
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fg-panel-pill-ghost {
+  position: fixed;
+  background: var(--color-blue);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 200;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+/* Pre-arrival check rows in the panel */
+.fg-panel-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+.fg-panel-check:hover {
+  background: var(--color-cream);
+}
+.fg-panel-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-green);
+  cursor: pointer;
+}
+.fg-panel-check .is-done {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+/* Mobile: panel goes full-screen */
+@media (max-width: 700px) {
+  .fg-panel {
+    width: 100vw;
+  }
+  .fg-status-strip {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .fg-status-chip {
+    flex-shrink: 0;
+  }
+}

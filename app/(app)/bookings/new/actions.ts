@@ -146,6 +146,7 @@ export async function createBookingRequest(formData: FormData) {
   }
 
   revalidatePath('/bookings')
+  revalidatePath('/house')
   revalidatePath('/dashboard')
   revalidatePath('/admin/bookings')
   redirect('/bookings?success=1')
