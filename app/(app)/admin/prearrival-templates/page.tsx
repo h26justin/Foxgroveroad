@@ -44,11 +44,11 @@ export default async function PrearrivalTemplatesPage({
     <div>
       <div className="mb-6">
         <Link
-          href="/bedrooms"
+          href="/house"
           className="text-xs fg-mono inline-flex items-center gap-1 mb-3"
           style={{ color: 'var(--color-muted)' }}
         >
-          ← Bedrooms
+          ← House
         </Link>
         <h1
           className="text-2xl md:text-3xl mb-2"

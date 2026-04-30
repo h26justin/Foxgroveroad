@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import BookingsCalendar from '../admin/bookings/BookingsCalendar'
@@ -139,18 +139,6 @@ export default function HouseClient({
     openPanel({ booking: null, request: requestId })
   }
 
-  // Group bookings by room for the calendar
-  const bookingsByRoom: Record<string, Booking[]> = useMemo(() => {
-    const m: Record<string, Booking[]> = {}
-    for (const b of visibleBookings) {
-      const roomId = b.beds?.room_id
-      if (!roomId) continue
-      if (!m[roomId]) m[roomId] = []
-      m[roomId].push(b)
-    }
-    return m
-  }, [visibleBookings])
-
   // Pending and unassigned approved requests for the compact strip
   const pendingVisible = useMemo(
     () => visibleRequests.filter((r) => r.status === 'pending'),
@@ -276,8 +264,6 @@ export default function HouseClient({
         <PendingStrip
           requests={pendingVisible}
           onTap={handleRequestTap}
-          startISO={startISO}
-          days={days}
         />
       )}
 
@@ -331,6 +317,7 @@ export default function HouseClient({
         startISO={startISO}
         currentMonthStart={thisMonthStart}
         onBookingTap={isAdmin ? handleBookingTap : undefined}
+        hideRequestLanes
       />
 
       {/* ─── Slide-over panel ─── */}
@@ -417,13 +404,9 @@ function StatusStrip({
 function PendingStrip({
   requests,
   onTap,
-  startISO,
-  days,
 }: {
   requests: Request[]
   onTap: (id: string) => void
-  startISO: string
-  days: string[]
 }) {
   return (
     <section className="fg-card p-4 mb-4">

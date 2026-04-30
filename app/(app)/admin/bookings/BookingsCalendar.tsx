@@ -69,6 +69,7 @@ export default function BookingsCalendar({
   startISO,
   currentMonthStart,
   onBookingTap,
+  hideRequestLanes,
 }: {
   days: string[]
   rooms: Room[]
@@ -81,6 +82,10 @@ export default function BookingsCalendar({
    *  to /admin/bookings/<id>. Used by the House page to open the
    *  slide-over panel. */
   onBookingTap?: (bookingId: string) => void
+  /** When true, suppresses the pending + approved-unassigned lanes at the
+   *  top of the grid. The House page renders those above the calendar in
+   *  its own clickable cards, so the lanes here would duplicate. */
+  hideRequestLanes?: boolean
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -313,30 +318,36 @@ export default function BookingsCalendar({
           </div>
 
           {/* Pending lane */}
-          <Lane
-            label={`Pending (${pending.length})`}
-            sublabel="awaiting your review"
-            requests={pending}
-            startISO={startISO}
-            totalDays={totalDays}
-            color="amber"
-          />
+          {!hideRequestLanes && (
+            <Lane
+              label={`Pending (${pending.length})`}
+              sublabel="awaiting your review"
+              requests={pending}
+              startISO={startISO}
+              totalDays={totalDays}
+              color="amber"
+            />
+          )}
 
           {/* Approved-unassigned lane */}
-          <Lane
-            label={`Approved (${approvedUnassigned.length})`}
-            sublabel="needs bed assignment"
-            requests={approvedUnassigned}
-            startISO={startISO}
-            totalDays={totalDays}
-            color="green"
-            showAssignLink
-          />
+          {!hideRequestLanes && (
+            <Lane
+              label={`Approved (${approvedUnassigned.length})`}
+              sublabel="needs bed assignment"
+              requests={approvedUnassigned}
+              startISO={startISO}
+              totalDays={totalDays}
+              color="green"
+              showAssignLink
+            />
+          )}
 
-          <div
-            className="border-t-2"
-            style={{ borderColor: 'var(--color-warm)' }}
-          />
+          {!hideRequestLanes && (
+            <div
+              className="border-t-2"
+              style={{ borderColor: 'var(--color-warm)' }}
+            />
+          )}
 
           {/* Room rows (draggable) */}
           {rooms.map((room) => (

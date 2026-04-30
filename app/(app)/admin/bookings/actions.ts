@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function approveRequest(formData: FormData) {
   const id = String(formData.get('id') ?? '')
-  if (!id) redirect('/admin/bookings')
+  if (!id) redirect('/house')
 
   const supabase = await createClient()
   const {
@@ -27,20 +27,23 @@ export async function approveRequest(formData: FormData) {
 
   if (error) {
     redirect(
-      `/admin/bookings?error=${encodeURIComponent(error.message)}`
+      `/house?error=${encodeURIComponent(error.message)}`
     )
   }
 
+  revalidatePath('/house')
   revalidatePath('/admin/bookings')
   revalidatePath('/dashboard')
   revalidatePath('/bookings')
-  redirect('/admin/bookings?approved=1')
+  // Land back on the request inside the slide-over so the user sees the
+  // newly-approved booking with bed-assignment UI ready.
+  redirect(`/house?request=${id}&saved=Approved`)
 }
 
 export async function declineRequest(formData: FormData) {
   const id = String(formData.get('id') ?? '')
   const reason = String(formData.get('reason') ?? '').trim() || null
-  if (!id) redirect('/admin/bookings')
+  if (!id) redirect('/house')
 
   const supabase = await createClient()
   const {
@@ -61,14 +64,15 @@ export async function declineRequest(formData: FormData) {
 
   if (error) {
     redirect(
-      `/admin/bookings?error=${encodeURIComponent(error.message)}`
+      `/house?error=${encodeURIComponent(error.message)}`
     )
   }
 
+  revalidatePath('/house')
   revalidatePath('/admin/bookings')
   revalidatePath('/dashboard')
   revalidatePath('/bookings')
-  redirect('/admin/bookings?declined=1')
+  redirect('/house?saved=Declined')
 }
 
 /**
