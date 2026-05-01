@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { floorLabel } from '@/lib/floors'
+import ReportIssueButton from '../../../issues/ReportIssueButton'
 import {
   createTaskTemplate,
   toggleRoomCotCapacity,
@@ -178,6 +179,9 @@ export default async function AdminRoomDetailPage({
             turnaroundCount > 0 &&
             ` (${scheduledCount} scheduled, ${turnaroundCount} turnaround)`}
         </p>
+        <div className="mt-3">
+          <ReportIssueButton roomId={room.id} roomName={room.name} />
+        </div>
       </div>
 
       {saved && <div className="fg-msg-success mb-6">Saved.</div>}

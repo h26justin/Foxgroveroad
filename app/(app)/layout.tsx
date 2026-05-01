@@ -11,16 +11,28 @@ export default async function AuthedLayout({
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
 
-  // Pending booking-request count — only relevant for admins (renders a badge
-  // on the Bookings nav item). Family/cleaner users skip the query.
+  // Counts for nav badges. Both queries are independent — fire in
+  // parallel. Pending only matters for admins; open-issue count matters
+  // for admin + cleaner.
   let pendingCount = 0
-  if (profile.role === 'admin') {
+  let openIssueCount = 0
+  if (profile.role === 'admin' || profile.role === 'cleaner') {
     const supabase = await createClient()
-    const { count } = await supabase
-      .from('booking_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending')
-    pendingCount = count ?? 0
+    const queries: Promise<any>[] = [
+      profile.role === 'admin'
+        ? supabase
+            .from('booking_requests')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending')
+        : Promise.resolve({ count: 0 }),
+      supabase
+        .from('issues')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open'),
+    ]
+    const [pendingRes, issuesRes] = await Promise.all(queries)
+    pendingCount = pendingRes.count ?? 0
+    openIssueCount = issuesRes.count ?? 0
   }
 
   return (
@@ -28,7 +40,11 @@ export default async function AuthedLayout({
       className="fg-app-shell"
       style={{ background: 'var(--color-cream)' }}
     >
-      <TopNav profile={profile} pendingCount={pendingCount} />
+      <TopNav
+        profile={profile}
+        pendingCount={pendingCount}
+        openIssueCount={openIssueCount}
+      />
       <main>
         <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10">
           {children}

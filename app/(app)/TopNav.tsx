@@ -13,9 +13,11 @@ import { usePathname } from 'next/navigation'
 export default function TopNav({
   profile,
   pendingCount,
+  openIssueCount,
 }: {
   profile: { id: string; full_name: string; role: string }
   pendingCount: number
+  openIssueCount: number
 }) {
   const pathname = usePathname() ?? ''
   const isAdmin = profile.role === 'admin'
@@ -41,6 +43,18 @@ export default function TopNav({
       icon: '📅',
       match: '/bookings',
     },
+    // Issues tab — visible to admin + cleaner. Badge shows the open count.
+    ...(profile.role === 'admin' || profile.role === 'cleaner'
+      ? [
+          {
+            href: '/issues',
+            label: 'Issues',
+            icon: '⚠',
+            match: '/issues',
+            badge: openIssueCount > 0 ? openIssueCount : undefined,
+          } satisfies NavItem,
+        ]
+      : []),
     ...(profile.role === 'admin' || profile.role === 'cleaner'
       ? [
           {

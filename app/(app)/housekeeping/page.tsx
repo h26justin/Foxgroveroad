@@ -21,8 +21,9 @@ export default async function HousekeepingPage({
 
   const today = new Date().toISOString().split('T')[0]
 
-  // All four data queries are independent — fire them in parallel.
-  const [dueRowsRes, completionsRes, roomsRes, roomOrderRes] = await Promise.all([
+  // Five queries fire in parallel — adding open-issue counts per room
+  // for the v13 issue-pill on each room header.
+  const [dueRowsRes, completionsRes, roomsRes, roomOrderRes, openIssuesRes] = await Promise.all([
     supabase
       .from('cleaner_tasks_today')
       .select(
@@ -48,7 +49,20 @@ export default async function HousekeepingPage({
       .select('room_id, position')
       .eq('user_id', profile.id)
       .order('position'),
+    supabase
+      .from('issues')
+      .select('id, room_id')
+      .eq('status', 'open'),
   ])
+
+  // Build a per-room open-issues count from the open issues list.
+  const openIssuesByRoom = new Map<string, number>()
+  for (const i of (openIssuesRes.data as any[]) ?? []) {
+    if (!i.room_id) continue
+    openIssuesByRoom.set(i.room_id, (openIssuesByRoom.get(i.room_id) ?? 0) + 1)
+  }
+  const openIssuesCount: Record<string, number> = {}
+  for (const [k, v] of openIssuesByRoom) openIssuesCount[k] = v
 
   return (
     <HousekeepingClient
@@ -56,6 +70,7 @@ export default async function HousekeepingPage({
       completions={(completionsRes.data as any[]) ?? []}
       rooms={(roomsRes.data as any[]) ?? []}
       roomOrder={(roomOrderRes.data as any[]) ?? []}
+      openIssuesCount={openIssuesCount}
       profile={profile}
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}

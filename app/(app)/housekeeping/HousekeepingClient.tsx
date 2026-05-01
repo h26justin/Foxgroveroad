@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import TaskRow from './TaskRow'
+import ReportIssueButton from '../issues/ReportIssueButton'
 import { floorLabel } from '@/lib/floors'
 import {
   markTaskComplete,
@@ -98,6 +99,7 @@ export default function HousekeepingClient({
   completions: initialCompletions,
   rooms,
   roomOrder,
+  openIssuesCount,
   profile,
   activeRoomId,
   errorMessage,
@@ -106,6 +108,7 @@ export default function HousekeepingClient({
   completions: Completion[]
   rooms: Room[]
   roomOrder: RoomOrderRow[]
+  openIssuesCount: Record<string, number>
   profile: Profile
   activeRoomId: string | null
   errorMessage: string | null
@@ -728,6 +731,7 @@ export default function HousekeepingClient({
                     floor={floor}
                     dueTasks={dueByRoom.get(room.id) ?? []}
                     completions={completionsByRoom.get(room.id) ?? []}
+                    openIssueCount={openIssuesCount[room.id] ?? 0}
                     isExpanded={expandedRooms.has(room.id)}
                     onToggle={() => toggleRoom(room.id)}
                     canTick={canTick}
@@ -777,6 +781,7 @@ function RoomAccordion({
   floor,
   dueTasks,
   completions,
+  openIssueCount,
   isExpanded,
   onToggle,
   canTick,
@@ -793,6 +798,7 @@ function RoomAccordion({
   floor: number
   dueTasks: DueTask[]
   completions: Completion[]
+  openIssueCount: number
   isExpanded: boolean
   onToggle: () => void
   canTick: boolean
@@ -851,6 +857,11 @@ function RoomAccordion({
           <span style={{ fontSize: 20, marginRight: 4 }}>{meta.icon}</span>
           <span className="fg-room-name">{room.name}</span>
           <span className="fg-room-counts">
+            {openIssueCount > 0 && (
+              <span className="fg-room-issue-pill">
+                ⚠ {openIssueCount}
+              </span>
+            )}
             {dueCount > 0 && (
               <span className="fg-room-badge fg-room-badge-due">
                 {dueCount} due
@@ -898,6 +909,14 @@ function RoomAccordion({
               No tasks needed in this room today.
             </p>
           )}
+
+          {/* Report-issue link — discreet, lives at the bottom of the body */}
+          <div
+            className="px-3 pb-3 pt-1 flex justify-end"
+            style={{ borderTop: '1px solid var(--color-warm)' }}
+          >
+            <ReportIssueButton roomId={room.id} roomName={room.name} />
+          </div>
         </div>
       )}
     </div>
