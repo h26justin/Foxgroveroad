@@ -1518,3 +1518,139 @@ button, a, label, input[type="checkbox"] {
     flex-shrink: 0;
   }
 }
+
+/* =====================================================================
+   v12 — Attachment gallery + lightbox
+   ===================================================================== */
+
+.fg-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.fg-attachment-thumb {
+  position: relative;
+  aspect-ratio: 1;
+}
+.fg-attachment-thumb-button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-warm);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-cream);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.fg-attachment-thumb-button:hover {
+  border-color: var(--color-faint);
+}
+.fg-attachment-thumb-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fg-attachment-thumb-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fg-attachment-thumb-delete:hover {
+  background: var(--color-red);
+}
+.fg-attachment-thumb-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 12px 6px 4px;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 0 0 6px 6px;
+}
+
+/* Lightbox — full-screen photo viewer */
+.fg-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fg-fade-in 0.15s ease-out;
+}
+.fg-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: default;
+}
+.fg-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fg-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: none;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fg-lightbox-prev { left: 16px; }
+.fg-lightbox-next { right: 16px; }
+.fg-lightbox-caption {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  max-width: 80vw;
+}
