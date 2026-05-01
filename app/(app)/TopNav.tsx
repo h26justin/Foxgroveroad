@@ -73,6 +73,12 @@ export default function TopNav({
             icon: '👥',
             match: '/admin/team',
           } satisfies NavItem,
+          {
+            href: '/pay',
+            label: 'Pay',
+            icon: '💷',
+            match: '/pay',
+          } satisfies NavItem,
         ]
       : []),
     {
