@@ -18,21 +18,30 @@ export default async function AuthedLayout({
   let openIssueCount = 0
   if (profile.role === 'admin' || profile.role === 'cleaner') {
     const supabase = await createClient()
-    const queries: Promise<any>[] = [
-      profile.role === 'admin'
-        ? supabase
-            .from('booking_requests')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'pending')
-        : Promise.resolve({ count: 0 }),
-      supabase
-        .from('issues')
+
+    // Build the open-issues query (always runs for admin+cleaner)
+    const openIssuesPromise = supabase
+      .from('issues')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open')
+
+    if (profile.role === 'admin') {
+      // Admin needs both counts — run in parallel
+      const pendingPromise = supabase
+        .from('booking_requests')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'open'),
-    ]
-    const [pendingRes, issuesRes] = await Promise.all(queries)
-    pendingCount = pendingRes.count ?? 0
-    openIssueCount = issuesRes.count ?? 0
+        .eq('status', 'pending')
+      const [pendingRes, issuesRes] = await Promise.all([
+        pendingPromise,
+        openIssuesPromise,
+      ])
+      pendingCount = pendingRes.count ?? 0
+      openIssueCount = issuesRes.count ?? 0
+    } else {
+      // Cleaner only needs the open-issues count
+      const issuesRes = await openIssuesPromise
+      openIssueCount = issuesRes.count ?? 0
+    }
   }
 
   return (
