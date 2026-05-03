@@ -4,6 +4,19 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDateRange, relativeFromToday, todayISO } from '@/lib/dates'
 import CancelBookingButton from './CancelBookingButton'
 
+type RequestRow = {
+  id: string
+  check_in: string
+  check_out: string
+  adults: number
+  children: number
+  status: string
+  notes: string | null
+}
+
+type GuestEntry = { full_name: string; position: number }
+type BedAssignment = { room_name: string; bed_label: string; guest_name: string | null }
+
 export default async function BookingsPage({
   searchParams,
 }: {
@@ -15,20 +28,78 @@ export default async function BookingsPage({
     searchParams,
   ])
   const { success, cancelled } = sp
+  const isAdmin = profile.role === 'admin'
 
   // All my requests, newest first by check-in date
-  const { data: requests } = await supabase
+  const { data: requestsRaw } = await supabase
     .from('booking_requests')
-    .select('id, check_in, check_out, adults, children, status, notes, created_at')
+    .select(
+      'id, check_in, check_out, adults, children, status, notes, created_at',
+    )
     .eq('requested_by', profile.id)
     .order('check_in', { ascending: false })
 
+  const requests = (requestsRaw as RequestRow[] | null) ?? []
+  const requestIds = requests.map((r) => r.id)
+
+  // Pull guest lists + bed assignments in parallel for ALL visible requests.
+  // Cheap join queries; size is bounded by the user's own bookings.
+  const [brgRes, bedsRes] = await Promise.all([
+    requestIds.length > 0
+      ? supabase
+          .from('booking_request_guests')
+          .select(
+            'request_id, position, guests:guests!booking_request_guests_guest_id_fkey(full_name)',
+          )
+          .in('request_id', requestIds)
+          .order('position')
+      : Promise.resolve({ data: [] as any[] }),
+    requestIds.length > 0
+      ? supabase
+          .from('bookings')
+          .select(
+            'request_id, guest_name, bed_id, beds:beds!bookings_bed_id_fkey(name, rooms:rooms!beds_room_id_fkey(name))',
+          )
+          .in('request_id', requestIds)
+          .eq('status', 'approved')
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+
+  // Build per-request guest list
+  const guestsByRequest = new Map<string, GuestEntry[]>()
+  for (const r of (brgRes.data as any[]) ?? []) {
+    if (!r.guests) continue
+    const list = guestsByRequest.get(r.request_id) ?? []
+    list.push({
+      full_name: (r.guests as any).full_name ?? '(deleted guest)',
+      position: r.position ?? 0,
+    })
+    guestsByRequest.set(r.request_id, list)
+  }
+  for (const arr of guestsByRequest.values()) {
+    arr.sort((a, b) => a.position - b.position)
+  }
+
+  // Build per-request bed assignment list
+  const bedsByRequest = new Map<string, BedAssignment[]>()
+  for (const b of (bedsRes.data as any[]) ?? []) {
+    const list = bedsByRequest.get(b.request_id) ?? []
+    list.push({
+      room_name: (b.beds as any)?.rooms?.name ?? '(deleted room)',
+      bed_label: (b.beds as any)?.name ?? '?',
+      guest_name: b.guest_name ?? null,
+    })
+    bedsByRequest.set(b.request_id, list)
+  }
+
   const today = todayISO()
-  const upcoming = (requests ?? []).filter(
-    (r) => r.check_out >= today && r.status !== 'cancelled' && r.status !== 'declined'
+  const upcoming = requests.filter(
+    (r) =>
+      r.check_out >= today && r.status !== 'cancelled' && r.status !== 'declined',
   )
-  const past = (requests ?? []).filter(
-    (r) => r.check_out < today || r.status === 'cancelled' || r.status === 'declined'
+  const past = requests.filter(
+    (r) =>
+      r.check_out < today || r.status === 'cancelled' || r.status === 'declined',
   )
 
   return (
@@ -48,7 +119,9 @@ export default async function BookingsPage({
             className="text-sm fg-mono"
             style={{ color: 'var(--color-muted)' }}
           >
-            Request a stay; we'll let you know once approved.
+            {isAdmin
+              ? 'Bookings you created. Tap "Open in panel" to manage guests and beds.'
+              : "Request a stay; we'll let you know once approved."}
           </p>
         </div>
         <Link
@@ -62,19 +135,19 @@ export default async function BookingsPage({
 
       {success && (
         <div className="fg-msg-success mb-6">
-          Request submitted. You'll get an update once it's reviewed.
+          Request submitted. You&apos;ll get an update once it&apos;s reviewed.
         </div>
       )}
       {cancelled && (
         <div className="fg-msg-success mb-6">Request cancelled.</div>
       )}
 
-      {(!requests || requests.length === 0) && (
+      {requests.length === 0 && (
         <div
           className="fg-card p-10 text-center"
           style={{ color: 'var(--color-muted)' }}
         >
-          <p className="mb-4">You haven't booked any stays yet.</p>
+          <p className="mb-4">You haven&apos;t booked any stays yet.</p>
           <Link href="/bookings/new" className="fg-btn-gold">
             Request your first stay
           </Link>
@@ -89,6 +162,9 @@ export default async function BookingsPage({
               <RequestCard
                 key={r.id}
                 request={r}
+                guests={guestsByRequest.get(r.id) ?? []}
+                beds={bedsByRequest.get(r.id) ?? []}
+                isAdmin={isAdmin}
                 canCancel={r.status === 'pending' || r.status === 'approved'}
               />
             ))}
@@ -101,7 +177,14 @@ export default async function BookingsPage({
           <h2 className="fg-section-label mb-3">Past &amp; archived</h2>
           <div className="space-y-3">
             {past.map((r) => (
-              <RequestCard key={r.id} request={r} canCancel={false} />
+              <RequestCard
+                key={r.id}
+                request={r}
+                guests={guestsByRequest.get(r.id) ?? []}
+                beds={bedsByRequest.get(r.id) ?? []}
+                isAdmin={isAdmin}
+                canCancel={false}
+              />
             ))}
           </div>
         </section>
@@ -112,23 +195,29 @@ export default async function BookingsPage({
 
 function RequestCard({
   request,
+  guests,
+  beds,
+  isAdmin,
   canCancel,
 }: {
-  request: {
-    id: string
-    check_in: string
-    check_out: string
-    adults: number
-    children: number
-    status: string
-    notes: string | null
-  }
+  request: RequestRow
+  guests: GuestEntry[]
+  beds: BedAssignment[]
+  isAdmin: boolean
   canCancel: boolean
 }) {
+  // Group beds by room for cleaner display
+  const byRoom = new Map<string, BedAssignment[]>()
+  for (const b of beds) {
+    const list = byRoom.get(b.room_name) ?? []
+    list.push(b)
+    byRoom.set(b.room_name, list)
+  }
+
   return (
     <div className="fg-card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0 flex-1" style={{ minWidth: 240 }}>
           <div
             className="text-base mb-1"
             style={{
@@ -139,7 +228,7 @@ function RequestCard({
             {formatDateRange(request.check_in, request.check_out)}
           </div>
           <div
-            className="text-xs fg-mono"
+            className="text-xs fg-mono mb-2"
             style={{ color: 'var(--color-muted)' }}
           >
             {request.adults} adult{request.adults === 1 ? '' : 's'}
@@ -148,17 +237,93 @@ function RequestCard({
             {request.status === 'pending' &&
               ` · check-in ${relativeFromToday(request.check_in)}`}
           </div>
+
+          {/* Guest list */}
+          {guests.length > 0 && (
+            <div className="mt-2">
+              <div
+                className="text-[10px] fg-mono uppercase tracking-wide mb-1"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Guests
+              </div>
+              <div
+                className="text-sm"
+                style={{ color: 'var(--color-ink)' }}
+              >
+                {guests.map((g) => g.full_name).join(', ')}
+              </div>
+            </div>
+          )}
+
+          {/* Bed assignments — only show for approved */}
+          {request.status === 'approved' && byRoom.size > 0 && (
+            <div className="mt-3">
+              <div
+                className="text-[10px] fg-mono uppercase tracking-wide mb-1"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Rooms
+              </div>
+              <div className="space-y-1">
+                {Array.from(byRoom.entries()).map(([roomName, bedsInRoom]) => (
+                  <div
+                    key={roomName}
+                    className="text-sm"
+                    style={{ color: 'var(--color-ink)' }}
+                  >
+                    🛏 {roomName}{' '}
+                    <span
+                      className="text-xs fg-mono"
+                      style={{ color: 'var(--color-muted)' }}
+                    >
+                      ·{' '}
+                      {bedsInRoom
+                        .map((b) => b.guest_name ?? 'Unassigned')
+                        .join(', ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Approved but no beds yet */}
+          {request.status === 'approved' && byRoom.size === 0 && (
+            <div
+              className="text-xs fg-mono mt-2"
+              style={{ color: 'var(--color-amber)' }}
+            >
+              ⚠ No beds assigned yet
+              {isAdmin && ' — open in panel to assign'}
+            </div>
+          )}
+
           {request.notes && (
             <p
-              className="text-sm mt-2"
+              className="text-sm mt-3 italic"
               style={{ color: 'var(--color-muted)' }}
             >
-              “{request.notes}”
+              &ldquo;{request.notes}&rdquo;
             </p>
           )}
         </div>
+
+        {/* Right side: status + actions */}
         <div className="flex flex-col items-end gap-2 shrink-0">
           <StatusPill status={request.status} />
+
+          {/* Edit/manage entry-point (admin only) */}
+          {isAdmin && request.status !== 'cancelled' && request.status !== 'declined' && (
+            <Link
+              href={`/house?request=${request.id}`}
+              className="fg-btn-ghost text-xs"
+              style={{ width: 'auto', padding: '6px 12px' }}
+            >
+              Open in panel →
+            </Link>
+          )}
+
           {canCancel && (
             <CancelBookingButton
               requestId={request.id}
@@ -184,5 +349,7 @@ function StatusPill({ status }: { status: string }) {
     declined: 'Declined',
     cancelled: 'Cancelled',
   }
-  return <span className={map[status] ?? 'fg-pill'}>{label[status] ?? status}</span>
+  return (
+    <span className={map[status] ?? 'fg-pill'}>{label[status] ?? status}</span>
+  )
 }
