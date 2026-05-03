@@ -88,6 +88,7 @@ export default function HouseClient({
   selectedRequestId,
   savedMessage,
   errorMessage,
+  roomStatuses,
 }: {
   profile: Profile
   isAdmin: boolean
@@ -148,6 +149,7 @@ export default function HouseClient({
   selectedRequestId: string | null
   savedMessage: string | null
   errorMessage: string | null
+  roomStatuses: Record<string, { status: 'green' | 'orange' | 'red'; reason: string }>
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -355,6 +357,7 @@ export default function HouseClient({
         currentMonthStart={thisMonthStart}
         onBookingTap={isAdmin ? handleBookingTap : undefined}
         hideRequestLanes
+        roomStatuses={roomStatuses}
       />
 
       {/* ─── Slide-over panel ─── */}

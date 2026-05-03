@@ -109,6 +109,7 @@ export default function HousekeepingClient({
   profile,
   activeRoomId,
   errorMessage,
+  roomStatuses,
 }: {
   dueTasks: DueTask[]
   completions: Completion[]
@@ -131,6 +132,7 @@ export default function HousekeepingClient({
   profile: Profile
   activeRoomId: string | null
   errorMessage: string | null
+  roomStatuses: Record<string, { status: 'green' | 'orange' | 'red'; reason: string }>
 }) {
   const canTick = profile.role === 'admin' || profile.role === 'cleaner'
 
@@ -764,6 +766,7 @@ export default function HousekeepingClient({
                     completions={completionsByRoom.get(room.id) ?? []}
                     openIssueCount={openIssuesCount[room.id] ?? 0}
                     prearrival={prearrivalByRoom[room.id] ?? null}
+                    statusInfo={roomStatuses[room.id]}
                     isExpanded={expandedRooms.has(room.id)}
                     onToggle={() => toggleRoom(room.id)}
                     canTick={canTick}
@@ -815,6 +818,7 @@ function RoomAccordion({
   completions,
   openIssueCount,
   prearrival,
+  statusInfo,
   isExpanded,
   onToggle,
   canTick,
@@ -840,6 +844,7 @@ function RoomAccordion({
     templates: { id: string; name: string; position: number }[]
     checkedTemplateIds: string[]
   } | null
+  statusInfo: { status: 'green' | 'orange' | 'red'; reason: string } | undefined
   isExpanded: boolean
   onToggle: () => void
   canTick: boolean
@@ -899,6 +904,27 @@ function RoomAccordion({
             ▸
           </span>
           <span style={{ fontSize: 20, marginRight: 4 }}>{meta.icon}</span>
+          {statusInfo && (
+            <span
+              title={`${statusInfo.status === 'green' ? 'Ready' : statusInfo.status === 'orange' ? 'Occupied' : 'Needs cleaning'} — ${statusInfo.reason}`}
+              aria-label={`${statusInfo.status === 'green' ? 'Ready' : statusInfo.status === 'orange' ? 'Occupied' : 'Needs cleaning'}`}
+              style={{
+                display: 'inline-block',
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                marginRight: 8,
+                background:
+                  statusInfo.status === 'green'
+                    ? 'var(--color-green, #2f7a4f)'
+                    : statusInfo.status === 'orange'
+                      ? 'var(--color-amber, #A8862E)'
+                      : 'var(--color-red, #b04030)',
+                flexShrink: 0,
+                verticalAlign: 'middle',
+              }}
+            />
+          )}
           <span className="fg-room-name">{room.name}</span>
           <span className="fg-room-counts">
             {prearrival && prearrivalUnchecked > 0 && (

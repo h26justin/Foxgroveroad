@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
+import { getAllRoomStatuses, STATUS_LABEL } from '@/lib/room-status'
+import { floorLabelShort } from '@/lib/floors'
 import {
   todayISO,
   formatDateShort,
@@ -55,6 +57,8 @@ export default async function DashboardPage() {
     pendingOneshotsCountRes,
     pendingRequestsCountRes,
     flags,
+    bedroomRoomsRes,
+    roomStatuses,
   ] = await Promise.all([
     // (1) Currently checked-in: approved bookings spanning today
     supabase
@@ -121,6 +125,15 @@ export default async function DashboardPage() {
       : Promise.resolve({ count: 0 } as any),
     // Feature flags — drive whether issue / one-shot blocks render
     getFeatureFlags(),
+    // (5) Bedrooms list — for the v31 status-light section
+    supabase
+      .from('rooms')
+      .select('id, name, floor')
+      .eq('room_type', 'bedroom')
+      .order('floor', { ascending: false })
+      .order('name'),
+    // (5b) Room statuses — derived from existing data
+    getAllRoomStatuses(supabase, today),
   ])
 
   const inHouse = (inHouseRes.data as any[]) ?? []
@@ -138,6 +151,24 @@ export default async function DashboardPage() {
   // as one row rather than five.
   const inHouseGroups = groupByRequest(inHouse)
   const upcomingGroups = groupByRequest(upcoming)
+
+  // ─── Bedroom status (v31) ─────────────────────────────────────────
+  const bedroomRooms = (bedroomRoomsRes.data as any[]) ?? []
+  const bedroomCounts = { green: 0, orange: 0, red: 0 }
+  for (const r of bedroomRooms) {
+    const s = roomStatuses.get(r.id)?.status ?? 'green'
+    bedroomCounts[s]++
+  }
+  // Group bedrooms by floor for compact column display
+  const _bedroomsByFloor = new Map<number, { id: string; name: string }[]>()
+  for (const r of bedroomRooms) {
+    const list = _bedroomsByFloor.get(r.floor) ?? []
+    list.push({ id: r.id, name: r.name })
+    _bedroomsByFloor.set(r.floor, list)
+  }
+  const bedroomRoomsByFloor = Array.from(_bedroomsByFloor.entries())
+    .sort((a, b) => b[0] - a[0]) // top of house first
+    .map(([floor, rooms]) => ({ floor, rooms }))
 
   return (
     <div>
@@ -215,6 +246,74 @@ export default async function DashboardPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* (1.5) Bedroom status (v31) ---------------------------------- */}
+      <section className="mb-8">
+        <h2
+          className="mb-3 flex items-baseline gap-3 flex-wrap"
+          style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: 22,
+            color: 'var(--color-ink)',
+          }}
+        >
+          <span>Bedroom status</span>
+          <span
+            className="fg-mono text-xs"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {bedroomCounts.green} ready · {bedroomCounts.orange} occupied ·{' '}
+            {bedroomCounts.red} need cleaning
+          </span>
+        </h2>
+        <div className="fg-card p-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2">
+            {bedroomRoomsByFloor.map(({ floor, rooms: floorRooms }) => (
+              <div key={floor} className="md:col-span-1">
+                <div
+                  className="fg-section-label mb-2"
+                  style={{ fontSize: 10 }}
+                >
+                  {floorLabelShort(floor)}
+                </div>
+                <ul className="space-y-1">
+                  {floorRooms.map((r) => {
+                    const info = roomStatuses.get(r.id)
+                    const status = info?.status ?? 'green'
+                    const color =
+                      status === 'green'
+                        ? 'var(--color-green, #2f7a4f)'
+                        : status === 'orange'
+                          ? 'var(--color-amber, #A8862E)'
+                          : 'var(--color-red, #b04030)'
+                    return (
+                      <li
+                        key={r.id}
+                        className="flex items-center gap-2 text-sm"
+                        style={{ color: 'var(--color-ink)' }}
+                        title={info?.reason ?? STATUS_LABEL[status]}
+                      >
+                        <span
+                          aria-label={STATUS_LABEL[status]}
+                          style={{
+                            display: 'inline-block',
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            background: color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span className="truncate">{r.name}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* (2) Coming up ----------------------------------------------- */}

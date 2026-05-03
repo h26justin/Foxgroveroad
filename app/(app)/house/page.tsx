@@ -1,6 +1,7 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { todayISO } from '@/lib/dates'
+import { getAllRoomStatuses } from '@/lib/room-status'
 import HouseClient from './HouseClient'
 
 /** Snap to first of the month for the given ISO date. */
@@ -339,6 +340,7 @@ export default async function HousePage({
       selectedRequestId={sp.request ?? null}
       savedMessage={sp.saved ?? null}
       errorMessage={sp.error ?? null}
+      roomStatuses={Object.fromEntries(await getAllRoomStatuses(supabase, today))}
     />
   )
 }

@@ -1,6 +1,7 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
+import { getAllRoomStatuses } from '@/lib/room-status'
 import HousekeepingClient from './HousekeepingClient'
 
 // 30s soft cache. Actions that mutate data call revalidatePath('/housekeeping')
@@ -301,6 +302,7 @@ export default async function HousekeepingPage({
       profile={profile}
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}
+      roomStatuses={Object.fromEntries(await getAllRoomStatuses(supabase, today))}
     />
   )
 }

@@ -71,6 +71,7 @@ export default function BookingsCalendar({
   currentMonthStart,
   onBookingTap,
   hideRequestLanes,
+  roomStatuses,
 }: {
   days: string[]
   rooms: Room[]
@@ -87,6 +88,9 @@ export default function BookingsCalendar({
    *  top of the grid. The House page renders those above the calendar in
    *  its own clickable cards, so the lanes here would duplicate. */
   hideRequestLanes?: boolean
+  /** Optional v31: room statuses keyed by room.id, render as a small dot
+   *  next to each room label. Pages that don't compute statuses can omit. */
+  roomStatuses?: Record<string, { status: 'green' | 'orange' | 'red'; reason: string }>
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -358,6 +362,7 @@ export default function BookingsCalendar({
             <RoomRow
               key={room.id}
               room={room}
+              statusInfo={roomStatuses?.[room.id]}
               days={days}
               bookings={bookingsByRoom[room.id] ?? []}
               startISO={startISO}
@@ -573,6 +578,7 @@ function RequestBar({
 
 function RoomRow({
   room,
+  statusInfo,
   days,
   bookings,
   startISO,
@@ -588,6 +594,7 @@ function RoomRow({
   onBookingTap,
 }: {
   room: Room
+  statusInfo?: { status: 'green' | 'orange' | 'red'; reason: string }
   days: string[]
   bookings: Booking[]
   startISO: string
@@ -645,13 +652,32 @@ function RoomRow({
     >
       <div className="shrink-0 px-4 py-3" style={{ width: ROW_LABEL_WIDTH_PX }}>
         <div
-          className="text-sm"
+          className="text-sm flex items-center gap-2"
           style={{
             fontFamily: 'var(--font-serif)',
             color: 'var(--color-ink)',
           }}
         >
-          {room.name}
+          {statusInfo && (
+            <span
+              title={`${statusInfo.status === 'green' ? 'Ready' : statusInfo.status === 'orange' ? 'Occupied' : 'Needs cleaning'} — ${statusInfo.reason}`}
+              aria-label={`${statusInfo.status === 'green' ? 'Ready' : statusInfo.status === 'orange' ? 'Occupied' : 'Needs cleaning'}`}
+              style={{
+                display: 'inline-block',
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background:
+                  statusInfo.status === 'green'
+                    ? 'var(--color-green, #2f7a4f)'
+                    : statusInfo.status === 'orange'
+                      ? 'var(--color-amber, #A8862E)'
+                      : 'var(--color-red, #b04030)',
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <span>{room.name}</span>
         </div>
         <div
           className="text-[10px] fg-mono"
