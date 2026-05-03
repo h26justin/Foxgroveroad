@@ -21,6 +21,7 @@ export default async function AdminTeamPage({
     supabase
       .from('profiles')
       .select('id, full_name, role, phone, created_at')
+      .eq('is_deleted', false)
       .order('created_at', { ascending: true }),
     supabase
       .from('cleaners')

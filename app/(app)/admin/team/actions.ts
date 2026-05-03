@@ -250,3 +250,143 @@ export async function toggleUserBanned(formData: FormData) {
     `/admin/team?saved=${encodeURIComponent(shouldBan ? 'Account disabled' : 'Account re-enabled')}`,
   )
 }
+
+// =====================================================================
+// v29 — soft-delete + email change
+// =====================================================================
+
+/**
+ * "Delete" a user. We don't actually remove the auth.users row (doing
+ * so would cascade-violate every booking/task/issue FK pointing at
+ * them). Instead we soft-delete:
+ *
+ *   1. Ban the auth user (100-year ban) so they can't sign in
+ *   2. Rotate their auth email to deleted+{uuid}@deleted.foxgrove.invalid
+ *      so the original address is freed for re-invite
+ *   3. Mark profiles.is_deleted = true and clear PII (name, phone)
+ *      while keeping the row so historical bookings/tasks still
+ *      reference a real profile and render naturally as "Deleted user"
+ *
+ * Requires the admin to type the user's full name as confirmation —
+ * single-tap protection on a destructive action.
+ *
+ * Cannot delete yourself.
+ *
+ * Reversible if you mis-click: un-ban the auth user, set is_deleted
+ * back to false, and restore the name. The auth.users row is
+ * preserved either way.
+ */
+export async function deleteUser(formData: FormData) {
+  const me = await requireAdmin()
+  const profileId = String(formData.get('profile_id') ?? '')
+  const confirmName = String(formData.get('confirm_name') ?? '').trim()
+
+  if (!profileId) {
+    redirect(`/admin/team?error=${encodeURIComponent('Missing profile')}`)
+  }
+  if (profileId === me.id) {
+    redirect(
+      `/admin/team?error=${encodeURIComponent('You cannot delete your own account.')}`,
+    )
+  }
+
+  // Look up the profile so we can verify the typed name and use the
+  // real name in the success message.
+  const supabase = await createClient()
+  const { data: profile, error: lookupErr } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('id', profileId)
+    .single()
+  if (lookupErr || !profile) {
+    redirect(
+      `/admin/team?error=${encodeURIComponent("Couldn't find that profile.")}`,
+    )
+  }
+
+  const realName = (profile as any).full_name as string
+  // Name match is case-insensitive and trim-tolerant. Has to match
+  // exactly otherwise — partial matches would defeat the safety.
+  if (confirmName.toLowerCase() !== realName.toLowerCase()) {
+    redirect(
+      `/admin/team?error=${encodeURIComponent("Confirmation name didn't match — nothing was deleted.")}`,
+    )
+  }
+
+  const admin = createAdminClient()
+
+  // Step 1+2: ban the auth user and rotate their email.
+  // email_confirm: true marks the new email as already-confirmed, so
+  // Supabase doesn't try to send a confirmation message (which would
+  // bounce off the .invalid TLD anyway).
+  const rotatedEmail = `deleted+${profileId}@deleted.foxgrove.invalid`
+  const { error: authErr } = await (admin.auth.admin as any).updateUserById(
+    profileId,
+    {
+      ban_duration: '876000h',
+      email: rotatedEmail,
+      email_confirm: true,
+    },
+  )
+  if (authErr) {
+    redirect(`/admin/team?error=${encodeURIComponent(authErr.message)}`)
+  }
+
+  // Step 3: anonymize the profile row. Role is preserved so any
+  // historical permission checks against this profile still resolve
+  // sensibly. Phone cleared (PII), name replaced with the tombstone.
+  const { error: profileErr } = await admin
+    .from('profiles')
+    .update({
+      full_name: 'Deleted user',
+      phone: null,
+      is_deleted: true,
+    } as any)
+    .eq('id', profileId)
+  if (profileErr) {
+    redirect(`/admin/team?error=${encodeURIComponent(profileErr.message)}`)
+  }
+
+  revalidatePath('/admin/team')
+  redirect(
+    `/admin/team?saved=${encodeURIComponent(`Deleted ${realName}'s account`)}`,
+  )
+}
+
+/**
+ * Change the email address on a user's auth record. Useful for fixing
+ * typos or migrating someone to a new address.
+ *
+ * email_confirm: true means we mark the new email as confirmed without
+ * sending the user a "please confirm" email. Justified here because
+ * (a) the admin is making this change deliberately and (b) we don't
+ * always have access to the new mailbox to click a confirm link.
+ */
+export async function updateUserEmail(formData: FormData) {
+  await requireAdmin()
+  const profileId = String(formData.get('profile_id') ?? '')
+  const newEmail = String(formData.get('new_email') ?? '').trim().toLowerCase()
+
+  if (!profileId) {
+    redirect(`/admin/team?error=${encodeURIComponent('Missing profile')}`)
+  }
+  if (!newEmail || !newEmail.includes('@') || newEmail.length < 5) {
+    redirect(
+      `/admin/team?error=${encodeURIComponent('Please enter a valid email.')}`,
+    )
+  }
+
+  const admin = createAdminClient()
+  const { error } = await (admin.auth.admin as any).updateUserById(profileId, {
+    email: newEmail,
+    email_confirm: true,
+  })
+  if (error) {
+    redirect(`/admin/team?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath('/admin/team')
+  redirect(
+    `/admin/team?saved=${encodeURIComponent(`Email updated to ${newEmail}`)}`,
+  )
+}

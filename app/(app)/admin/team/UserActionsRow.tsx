@@ -5,6 +5,8 @@ import {
   sendPasswordReset,
   sendMagicLink,
   toggleUserBanned,
+  deleteUser,
+  updateUserEmail,
 } from './actions'
 
 /**
@@ -12,6 +14,9 @@ import {
  * in a "click → confirm → submit" two-step so the buttons aren't a
  * single-tap mistake (sending password reset emails to the wrong
  * person is annoying for everyone).
+ *
+ * v29: Adds "Change email" (inline form) and "Delete" (requires the
+ * admin to type the user's full name as a second-factor confirmation).
  */
 export default function UserActionsRow({
   profileId,
@@ -27,11 +32,13 @@ export default function UserActionsRow({
   isBanned: boolean
 }) {
   const [confirming, setConfirming] = useState<
-    null | 'reset' | 'magic' | 'ban' | 'unban'
+    null | 'reset' | 'magic' | 'ban' | 'unban' | 'email' | 'delete'
   >(null)
+  const [confirmName, setConfirmName] = useState('')
 
   function cancel() {
     setConfirming(null)
+    setConfirmName('')
   }
 
   if (confirming === 'reset') {
@@ -140,6 +147,97 @@ export default function UserActionsRow({
     )
   }
 
+  if (confirming === 'email') {
+    return (
+      <form
+        action={updateUserEmail}
+        className="flex flex-wrap items-center gap-2"
+      >
+        <input type="hidden" name="profile_id" value={profileId} />
+        <span
+          className="text-xs fg-mono"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          New email for {fullName}:
+        </span>
+        <input
+          name="new_email"
+          type="email"
+          required
+          autoFocus
+          defaultValue={email ?? ''}
+          className="fg-input text-xs"
+          style={{ padding: '6px 10px', minWidth: 240 }}
+          placeholder="name@example.com"
+        />
+        <button type="submit" className="fg-btn-gold text-xs" style={btn}>
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={cancel}
+          className="fg-btn-ghost text-xs"
+          style={btn}
+        >
+          Cancel
+        </button>
+      </form>
+    )
+  }
+
+  if (confirming === 'delete') {
+    const nameMatches =
+      confirmName.trim().toLowerCase() === fullName.toLowerCase()
+    return (
+      <form
+        action={deleteUser}
+        className="flex flex-wrap items-center gap-2"
+      >
+        <input type="hidden" name="profile_id" value={profileId} />
+        <span
+          className="text-xs fg-mono"
+          style={{ color: 'var(--color-red)' }}
+        >
+          Type <strong>{fullName}</strong> to confirm:
+        </span>
+        <input
+          name="confirm_name"
+          type="text"
+          required
+          autoFocus
+          autoComplete="off"
+          value={confirmName}
+          onChange={(e) => setConfirmName(e.target.value)}
+          className="fg-input text-xs"
+          style={{ padding: '6px 10px', minWidth: 200 }}
+          placeholder={fullName}
+        />
+        <button
+          type="submit"
+          disabled={!nameMatches}
+          className="fg-btn-ghost text-xs"
+          style={{
+            ...btn,
+            background: nameMatches ? 'var(--color-red)' : undefined,
+            color: nameMatches ? 'white' : 'var(--color-muted)',
+            opacity: nameMatches ? 1 : 0.6,
+            cursor: nameMatches ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Delete user
+        </button>
+        <button
+          type="button"
+          onClick={cancel}
+          className="fg-btn-ghost text-xs"
+          style={btn}
+        >
+          Cancel
+        </button>
+      </form>
+    )
+  }
+
   // Default: row of buttons
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -171,6 +269,15 @@ export default function UserActionsRow({
           </button>
           <button
             type="button"
+            onClick={() => setConfirming('email')}
+            className="fg-btn-ghost text-xs"
+            style={btn}
+            title="Change this user's email address"
+          >
+            Change email
+          </button>
+          <button
+            type="button"
             onClick={() => setConfirming(isBanned ? 'unban' : 'ban')}
             className="fg-btn-ghost text-xs"
             style={{
@@ -181,6 +288,15 @@ export default function UserActionsRow({
             }}
           >
             {isBanned ? 'Re-enable' : 'Disable'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming('delete')}
+            className="fg-btn-ghost text-xs"
+            style={{ ...btn, color: 'var(--color-red)' }}
+            title="Permanently remove this user from the team list"
+          >
+            Delete
           </button>
         </>
       )}
