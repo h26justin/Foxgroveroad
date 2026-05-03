@@ -12,6 +12,7 @@ export type AttachmentKind =
   | 'damage'
   | 'general'
   | 'room'
+  | 'oneshot_task'
 
 export type Attachment = {
   id: string

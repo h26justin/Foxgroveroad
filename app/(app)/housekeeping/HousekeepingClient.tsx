@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import TaskRow from './TaskRow'
 import ReportIssueButton from '../issues/ReportIssueButton'
+import OneshotList from '../oneshots/OneshotList'
+import PostOneshotButton from '../oneshots/PostOneshotButton'
 import { floorLabel } from '@/lib/floors'
 import {
   markTaskComplete,
@@ -102,6 +104,7 @@ export default function HousekeepingClient({
   roomOrder,
   openIssuesCount,
   prearrivalByRoom,
+  oneshotTasks,
   profile,
   activeRoomId,
   errorMessage,
@@ -122,6 +125,7 @@ export default function HousekeepingClient({
       checkedTemplateIds: string[]
     }
   >
+  oneshotTasks: import('../oneshots/OneshotList').OneshotTask[]
   profile: Profile
   activeRoomId: string | null
   errorMessage: string | null
@@ -582,13 +586,16 @@ export default function HousekeepingClient({
             Housekeeping
           </h1>
           {profile.role === 'admin' && (
-            <Link
-              href="/admin/rooms"
-              className="fg-btn-ghost text-xs"
-              style={{ width: 'auto' }}
-            >
-              Manage tasks →
-            </Link>
+            <div className="flex items-center gap-2 flex-wrap">
+              <PostOneshotButton rooms={rooms} />
+              <Link
+                href="/admin/rooms"
+                className="fg-btn-ghost text-xs"
+                style={{ width: 'auto' }}
+              >
+                Manage tasks →
+              </Link>
+            </div>
           )}
         </div>
         <p
@@ -706,6 +713,12 @@ export default function HousekeepingClient({
       )}
 
       {errorMessage && <div className="fg-msg-error mb-4">{errorMessage}</div>}
+
+      {/* v23: One-shot tasks — admin-posted ad-hoc tasks above the rota */}
+      <OneshotList
+        tasks={oneshotTasks}
+        isAdmin={profile.role === 'admin'}
+      />
 
       {/* Empty state */}
       {totalDueCount === 0 && completedCount === 0 && sortMode === 'most_due' && (

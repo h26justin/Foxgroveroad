@@ -113,6 +113,57 @@ export default async function HousekeepingPage({
     }
   }
 
+  // v23: pending one-shot tasks + their photos. Admin + cleaner only;
+  // family users don't see these.
+  const isAdminOrCleaner =
+    profile.role === 'admin' || profile.role === 'cleaner'
+  type OneshotRow = {
+    id: string
+    description: string
+    priority: 'normal' | 'urgent'
+    room_id: string | null
+    room_name: string | null
+    created_at: string
+    created_by_name: string
+    photos: any[]
+  }
+  let oneshotTasks: OneshotRow[] = []
+  if (isAdminOrCleaner) {
+    const { data: oneshotRows } = await supabase
+      .from('oneshot_tasks')
+      .select(
+        'id, description, priority, room_id, created_at, rooms:rooms!oneshot_tasks_room_id_fkey(name), creator:profiles!oneshot_tasks_created_by_fkey(full_name)',
+      )
+      .eq('status', 'pending')
+      .order('priority', { ascending: false }) // urgent first (urgent > normal alphabetically)
+      .order('created_at', { ascending: false })
+
+    const oneshots = (oneshotRows as any[]) ?? []
+    let photosMap = new Map<string, any[]>()
+    if (oneshots.length > 0) {
+      // Reuse listAttachmentsForEntities pattern
+      const { listAttachmentsForEntities } = await import(
+        '@/lib/attachments'
+      )
+      photosMap = await listAttachmentsForEntities(
+        'oneshot_task',
+        oneshots.map((o) => o.id),
+      )
+    }
+    oneshotTasks = oneshots.map((o) => ({
+      id: o.id,
+      description: o.description,
+      priority: (o.priority === 'urgent' ? 'urgent' : 'normal') as
+        | 'normal'
+        | 'urgent',
+      room_id: o.room_id,
+      room_name: (o.rooms as any)?.name ?? null,
+      created_at: o.created_at,
+      created_by_name: (o.creator as any)?.full_name ?? 'Admin',
+      photos: photosMap.get(o.id) ?? [],
+    }))
+  }
+
   // Apply override to dueTasks: replace last_completed_date, and filter
   // out tasks that have been completed recently enough that they
   // shouldn't be in the due/overdue list. Don't trust the view's status
@@ -242,6 +293,7 @@ export default async function HousekeepingPage({
       roomOrder={(roomOrderRes.data as any[]) ?? []}
       openIssuesCount={openIssuesCount}
       prearrivalByRoom={prearrivalByRoom}
+      oneshotTasks={oneshotTasks}
       profile={profile}
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}

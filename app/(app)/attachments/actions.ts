@@ -35,7 +35,7 @@ export async function uploadAttachment(
   if (!entityId) return { error: 'Missing entity_id' }
 
   const validKinds: AttachmentKind[] = [
-    'issue', 'prearrival_check', 'booking', 'damage', 'general', 'room',
+    'issue', 'prearrival_check', 'booking', 'damage', 'general', 'room', 'oneshot_task',
   ]
   if (!validKinds.includes(kind)) return { error: 'Invalid kind' }
 
