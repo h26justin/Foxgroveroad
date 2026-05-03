@@ -1,6 +1,7 @@
 import { requireProfile } from '@/lib/auth'
 import { updateProfile, updateAccessibilityMode } from './actions'
 import InstallSection from './InstallSection'
+import PushNotificationsSection from './PushNotificationsSection'
 
 export default async function SettingsPage({
   searchParams,
@@ -178,6 +179,10 @@ export default async function SettingsPage({
 
       <div className="mt-6">
         <InstallSection />
+      </div>
+
+      <div className="mt-6">
+        <PushNotificationsSection />
       </div>
     </div>
   )

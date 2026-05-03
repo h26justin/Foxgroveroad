@@ -4,7 +4,7 @@ import { login } from './actions'
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>
+  searchParams: Promise<{ error?: string; next?: string; password_updated?: string }>
 }) {
   const params = await searchParams
 
@@ -65,6 +65,12 @@ export default async function LoginPage({
                 className="fg-input"
               />
             </div>
+
+            {params.password_updated && (
+              <div className="fg-msg-success">
+                Password updated. Sign in with your new password.
+              </div>
+            )}
 
             {params.error && (
               <div className="fg-msg-error">{params.error}</div>

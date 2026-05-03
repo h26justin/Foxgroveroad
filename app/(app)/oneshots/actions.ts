@@ -58,6 +58,28 @@ export async function createOneshotTask(
   if (error || !row) return { error: error?.message ?? 'Failed to create task' }
 
   revalidatePath('/housekeeping')
+
+  // Notify cleaners (best-effort — don't fail the task creation if push
+  // misfires). Dynamic import keeps web-push out of any client bundle.
+  try {
+    const { sendPushToUsers, getCleanerUserIds } = await import('@/lib/push')
+    const cleanerIds = await getCleanerUserIds()
+    if (cleanerIds.length > 0) {
+      const preview =
+        description.length > 80
+          ? description.slice(0, 77) + '…'
+          : description
+      await sendPushToUsers(cleanerIds, {
+        title: priority === 'urgent' ? '⚠ Urgent task' : 'New task',
+        body: preview,
+        url: '/housekeeping',
+        tag: `oneshot-${row.id}`,
+      })
+    }
+  } catch (err: any) {
+    console.error('[oneshot] push notify failed:', err?.message ?? err)
+  }
+
   return { ok: true, task_id: row.id }
 }
 
