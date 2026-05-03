@@ -1,5 +1,6 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 import LinenClient from './LinenClient'
 import { redirect } from 'next/navigation'
 
@@ -17,6 +18,8 @@ export default async function LinenPage({
     searchParams,
     createClient(),
   ])
+  // Feature gate: hide entirely when the linen feature is off
+  if (!(await isFeatureEnabled('linen'))) redirect('/housekeeping')
   // Family users don't need linen — gate to admin/cleaner
   if (profile.role !== 'admin' && profile.role !== 'cleaner') {
     redirect('/housekeeping')

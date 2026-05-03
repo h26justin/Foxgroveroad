@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 import AddGuestButton from './AddGuestButton'
 
 export const revalidate = 30
@@ -16,6 +17,7 @@ export default async function GuestsIndexPage() {
     createClient(),
   ])
   if (profile.role !== 'admin') redirect('/house')
+  if (!(await isFeatureEnabled('guests'))) redirect('/housekeeping')
 
   // Fetch all guests + their linked profile data (when linked)
   const { data: guestsRaw } = await supabase

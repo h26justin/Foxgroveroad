@@ -1,5 +1,6 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { getFeatureFlags } from '@/lib/feature-flags'
 import HousekeepingClient from './HousekeepingClient'
 
 // 30s soft cache. Actions that mutate data call revalidatePath('/housekeeping')
@@ -114,7 +115,9 @@ export default async function HousekeepingPage({
   }
 
   // v23: pending one-shot tasks + their photos. Admin + cleaner only;
-  // family users don't see these.
+  // family users don't see these. v27: also gated on feature flag.
+  const flags = await getFeatureFlags()
+  const oneshotTasksEnabled = flags['oneshot_tasks'] !== false
   const isAdminOrCleaner =
     profile.role === 'admin' || profile.role === 'cleaner'
   type OneshotRow = {
@@ -128,7 +131,7 @@ export default async function HousekeepingPage({
     photos: any[]
   }
   let oneshotTasks: OneshotRow[] = []
-  if (isAdminOrCleaner) {
+  if (isAdminOrCleaner && oneshotTasksEnabled) {
     const { data: oneshotRows } = await supabase
       .from('oneshot_tasks')
       .select(
@@ -294,6 +297,7 @@ export default async function HousekeepingPage({
       openIssuesCount={openIssuesCount}
       prearrivalByRoom={prearrivalByRoom}
       oneshotTasks={oneshotTasks}
+      oneshotTasksEnabled={oneshotTasksEnabled}
       profile={profile}
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}

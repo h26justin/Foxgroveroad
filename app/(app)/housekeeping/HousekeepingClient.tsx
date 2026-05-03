@@ -105,6 +105,7 @@ export default function HousekeepingClient({
   openIssuesCount,
   prearrivalByRoom,
   oneshotTasks,
+  oneshotTasksEnabled,
   profile,
   activeRoomId,
   errorMessage,
@@ -126,6 +127,7 @@ export default function HousekeepingClient({
     }
   >
   oneshotTasks: OneshotTask[]
+  oneshotTasksEnabled: boolean
   profile: Profile
   activeRoomId: string | null
   errorMessage: string | null
@@ -587,7 +589,7 @@ export default function HousekeepingClient({
           </h1>
           {profile.role === 'admin' && (
             <div className="flex items-center gap-2 flex-wrap">
-              <PostOneshotButton rooms={rooms} />
+              {oneshotTasksEnabled && <PostOneshotButton rooms={rooms} />}
               <Link
                 href="/admin/rooms"
                 className="fg-btn-ghost text-xs"
@@ -715,11 +717,13 @@ export default function HousekeepingClient({
       {errorMessage && <div className="fg-msg-error mb-4">{errorMessage}</div>}
 
       {/* v23: One-shot tasks — admin-posted ad-hoc tasks above the rota */}
-      <OneshotList
-        tasks={oneshotTasks}
-        isAdmin={profile.role === 'admin'}
-        currentUserId={profile.id}
-      />
+      {oneshotTasksEnabled && (
+        <OneshotList
+          tasks={oneshotTasks}
+          isAdmin={profile.role === 'admin'}
+          currentUserId={profile.id}
+        />
+      )}
 
       {/* Empty state */}
       {totalDueCount === 0 && completedCount === 0 && sortMode === 'most_due' && (

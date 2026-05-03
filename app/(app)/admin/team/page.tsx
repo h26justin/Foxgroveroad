@@ -81,16 +81,31 @@ export default async function AdminTeamPage({
 
   return (
     <div>
-      <div className="mb-8">
-        <h1
-          className="text-3xl mb-2"
-          style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-ink)' }}
+      <div className="mb-8 flex items-baseline justify-between gap-4 flex-wrap">
+        <div>
+          <h1
+            className="text-3xl mb-2"
+            style={{
+              fontFamily: 'var(--font-serif)',
+              color: 'var(--color-ink)',
+            }}
+          >
+            Team
+          </h1>
+          <p
+            className="text-sm fg-mono"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            Manage who has access and what role they have.
+          </p>
+        </div>
+        <a
+          href="/admin/features"
+          className="fg-btn-ghost text-xs"
+          style={{ width: 'auto', padding: '8px 14px' }}
         >
-          Team
-        </h1>
-        <p className="text-sm fg-mono" style={{ color: 'var(--color-muted)' }}>
-          Manage who has access and what role they have.
-        </p>
+          Features →
+        </a>
       </div>
 
       {saved && (

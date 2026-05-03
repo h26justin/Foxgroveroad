@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { listAttachmentsForEntities } from '@/lib/attachments'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 import { redirect } from 'next/navigation'
 import IssuesClient from './IssuesClient'
 
@@ -21,6 +22,7 @@ export default async function IssuesPage({
     createClient(),
   ])
 
+  if (!(await isFeatureEnabled('issues'))) redirect('/housekeeping')
   if (profile.role !== 'admin' && profile.role !== 'cleaner') {
     redirect('/house')
   }

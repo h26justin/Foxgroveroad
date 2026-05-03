@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { getFeatureFlags } from '@/lib/feature-flags'
 import TopNav from './TopNav'
 
 export default async function AuthedLayout({
@@ -44,6 +45,9 @@ export default async function AuthedLayout({
     }
   }
 
+  // Feature flags — drives which nav tabs appear
+  const featureFlags = await getFeatureFlags()
+
   // Larger-text mode: applied as a class on the shell so any styles
   // that opt in via .fg-acc-large can scale.
   const accClass =
@@ -58,6 +62,7 @@ export default async function AuthedLayout({
         profile={profile}
         pendingCount={pendingCount}
         openIssueCount={openIssueCount}
+        featureFlags={featureFlags}
       />
       <main>
         <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10">

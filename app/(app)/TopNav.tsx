@@ -14,13 +14,16 @@ export default function TopNav({
   profile,
   pendingCount,
   openIssueCount,
+  featureFlags,
 }: {
   profile: { id: string; full_name: string; role: string }
   pendingCount: number
   openIssueCount: number
+  featureFlags: Record<string, boolean>
 }) {
   const pathname = usePathname() ?? ''
   const isAdmin = profile.role === 'admin'
+  const flagOn = (name: string) => featureFlags[name] !== false
 
   // Item definition. `match` is the path-prefix that activates the highlight.
   const items: NavItem[] = [
@@ -44,7 +47,8 @@ export default function TopNav({
       match: '/bookings',
     },
     // Issues tab — visible to admin + cleaner. Badge shows the open count.
-    ...(profile.role === 'admin' || profile.role === 'cleaner'
+    ...((profile.role === 'admin' || profile.role === 'cleaner') &&
+    flagOn('issues')
       ? [
           {
             href: '/issues',
@@ -55,7 +59,8 @@ export default function TopNav({
           } satisfies NavItem,
         ]
       : []),
-    ...(profile.role === 'admin' || profile.role === 'cleaner'
+    ...((profile.role === 'admin' || profile.role === 'cleaner') &&
+    flagOn('linen')
       ? [
           {
             href: '/linen',
@@ -73,18 +78,26 @@ export default function TopNav({
             icon: '👥',
             match: '/admin/team',
           } satisfies NavItem,
-          {
-            href: '/admin/guests',
-            label: 'Guests',
-            icon: '🧳',
-            match: '/admin/guests',
-          } satisfies NavItem,
-          {
-            href: '/pay',
-            label: 'Pay',
-            icon: '💷',
-            match: '/pay',
-          } satisfies NavItem,
+          ...(flagOn('guests')
+            ? [
+                {
+                  href: '/admin/guests',
+                  label: 'Guests',
+                  icon: '🧳',
+                  match: '/admin/guests',
+                } satisfies NavItem,
+              ]
+            : []),
+          ...(flagOn('pay')
+            ? [
+                {
+                  href: '/pay',
+                  label: 'Pay',
+                  icon: '💷',
+                  match: '/pay',
+                } satisfies NavItem,
+              ]
+            : []),
         ]
       : []),
     {

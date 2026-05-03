@@ -19,6 +19,15 @@ export async function createOneshotTask(
   formData: FormData,
 ): Promise<{ ok?: true; task_id?: string; error?: string }> {
   const profile = await requireAdmin()
+
+  // Defense in depth: refuse if the oneshot_tasks feature is disabled.
+  // The UI is hidden when the flag is off, but a stale tab or a manual
+  // POST shouldn't be able to create tasks anyway.
+  const { isFeatureEnabled } = await import('@/lib/feature-flags')
+  if (!(await isFeatureEnabled('oneshot_tasks'))) {
+    return { error: 'One-shot tasks are disabled' }
+  }
+
   const supabase = await createClient()
 
   const description = String(formData.get('description') ?? '').trim()

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 import PayClient from './PayClient'
 
 export const revalidate = 30
@@ -17,6 +18,7 @@ export default async function PayPage() {
     createClient(),
   ])
   if (profile.role !== 'admin') redirect('/house')
+  if (!(await isFeatureEnabled('pay'))) redirect('/housekeeping')
 
   // Fire all three queries in parallel
   const [ratesRes, weeksRes] = await Promise.all([
