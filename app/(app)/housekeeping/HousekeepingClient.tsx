@@ -135,6 +135,12 @@ export default function HousekeepingClient({
   roomStatuses: Record<string, { status: 'green' | 'orange' | 'red'; reason: string }>
 }) {
   const canTick = profile.role === 'admin' || profile.role === 'cleaner'
+  const isAdmin = profile.role === 'admin'
+
+  // v32: surface a toast when admin flags a task for redo
+  const handleFlagged = (msg: string) => {
+    setToast({ message: msg, completionId: null, snapshot: null })
+  }
 
   // ─── Live tickable state ───────────────────────────────────────
   // Held in client state so optimistic ticks don't require a refetch.
@@ -409,6 +415,38 @@ export default function HousekeepingClient({
         setCompletions((prev) => [completion, ...prev])
         setToast({
           message: result.error,
+          completionId: null,
+          snapshot: null,
+        })
+      }
+    })()
+  }
+
+  // v32: undo an arbitrary completion (not just the most recent toast).
+  // Used by the per-row "Undo" button in the CompletedSection.
+  const handleUndoCompletion = (completion: Completion) => {
+    // Optimistic: remove from completions immediately. If the underlying
+    // task template still exists in our `rooms` data, the next render
+    // will re-show it as due (cleaner_tasks_today view re-derives this on
+    // the server). For the optimistic state we just trust that revalidate
+    // will fix things up shortly — keeping the local code simpler than
+    // trying to reconstruct a Due row from the completion.
+    const snapshot = completion
+    setCompletions((prev) => prev.filter((c) => c.id !== completion.id))
+
+    ;(async () => {
+      const result = await undoTaskComplete(completion.id)
+      if (result.error) {
+        // Roll back: put the completion back
+        setCompletions((prev) => [snapshot, ...prev])
+        setToast({
+          message: result.error,
+          completionId: null,
+          snapshot: null,
+        })
+      } else {
+        setToast({
+          message: '↺ Tick removed',
           completionId: null,
           snapshot: null,
         })
@@ -718,7 +756,7 @@ export default function HousekeepingClient({
 
       {errorMessage && <div className="fg-msg-error mb-4">{errorMessage}</div>}
 
-      {/* v23: One-shot tasks — admin-posted ad-hoc tasks above the rota */}
+      {/* v23: One-off tasks — admin-posted ad-hoc tasks above the rota */}
       {oneshotTasksEnabled && (
         <OneshotList
           tasks={oneshotTasks}
@@ -770,10 +808,14 @@ export default function HousekeepingClient({
                     isExpanded={expandedRooms.has(room.id)}
                     onToggle={() => toggleRoom(room.id)}
                     canTick={canTick}
+                    currentUserId={profile.id}
+                    isAdmin={profile.role === 'admin'}
                     sortMode={sortMode}
                     isDragging={drag?.roomId === room.id}
                     isHoverTarget={isHoverTarget}
                     onTick={handleTick}
+                    onUndoCompletion={handleUndoCompletion}
+                    onFlagged={handleFlagged}
                     onDragStart={handleDragStart}
                     onDragMove={handleDragMove}
                     onDragEnd={handleDragEnd}
@@ -822,10 +864,14 @@ function RoomAccordion({
   isExpanded,
   onToggle,
   canTick,
+  currentUserId,
+  isAdmin,
   sortMode,
   isDragging,
   isHoverTarget,
   onTick,
+  onUndoCompletion,
+  onFlagged,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -848,10 +894,14 @@ function RoomAccordion({
   isExpanded: boolean
   onToggle: () => void
   canTick: boolean
+  currentUserId: string
+  isAdmin: boolean
   sortMode: SortMode
   isDragging: boolean
   isHoverTarget: boolean
   onTick: (task: DueTask) => void
+  onUndoCompletion: (completion: Completion) => void
+  onFlagged: (msg: string) => void
   onDragStart: (e: React.PointerEvent, room: Room) => void
   onDragMove: (e: React.PointerEvent) => void
   onDragEnd: (e: React.PointerEvent) => void
@@ -974,14 +1024,24 @@ function RoomAccordion({
                   frequencyDays={task.frequency_days}
                   taskKind={task.task_kind ?? 'recurring'}
                   canTick={canTick}
+                  canFlag={isAdmin}
+                  roomId={room.id}
+                  roomName={room.name}
                   onTick={() => onTick(task)}
+                  onFlagged={onFlagged}
                 />
               ))}
             </div>
           )}
 
           {completions.length > 0 && (
-            <CompletedSection completions={completions} />
+            <CompletedSection
+              completions={completions}
+              canUndo={canTick}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              onUndo={onUndoCompletion}
+            />
           )}
 
           {dueTasks.length === 0 && completions.length === 0 && (
@@ -1006,7 +1066,19 @@ function RoomAccordion({
   )
 }
 
-function CompletedSection({ completions }: { completions: Completion[] }) {
+function CompletedSection({
+  completions,
+  canUndo,
+  currentUserId,
+  isAdmin,
+  onUndo,
+}: {
+  completions: Completion[]
+  canUndo: boolean
+  currentUserId: string
+  isAdmin: boolean
+  onUndo: (completion: Completion) => void
+}) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="fg-completed-section">
@@ -1031,13 +1103,51 @@ function CompletedSection({ completions }: { completions: Completion[] }) {
               hour: '2-digit',
               minute: '2-digit',
             })
+            // Permission to undo: admin can undo anyone's; cleaner can
+            // undo their own. RLS also enforces this server-side.
+            const allowedToUndo =
+              canUndo && (isAdmin || c.completed_by === currentUserId)
             return (
-              <div key={c.id} className="fg-completed-row">
+              <div
+                key={c.id}
+                className="fg-completed-row"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
                 <span className="fg-completed-check" aria-hidden>
                   ✓
                 </span>
-                <span className="fg-completed-name">{taskName}</span>
+                <span className="fg-completed-name" style={{ flex: 1 }}>
+                  {taskName}
+                </span>
                 <span className="fg-completed-time">{time}</span>
+                {allowedToUndo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Untick "${taskName}"? It'll go back into the list as due.`,
+                        )
+                      ) {
+                        onUndo(c)
+                      }
+                    }}
+                    className="fg-btn-ghost"
+                    style={{
+                      width: 'auto',
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      color: 'var(--color-muted)',
+                    }}
+                    title="Untick this completion"
+                  >
+                    Undo
+                  </button>
+                )}
               </div>
             )
           })}

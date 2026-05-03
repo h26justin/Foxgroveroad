@@ -25,7 +25,7 @@ export async function createOneshotTask(
   // POST shouldn't be able to create tasks anyway.
   const { isFeatureEnabled } = await import('@/lib/feature-flags')
   if (!(await isFeatureEnabled('oneshot_tasks'))) {
-    return { error: 'One-shot tasks are disabled' }
+    return { error: 'One-off tasks are disabled' }
   }
 
   const supabase = await createClient()

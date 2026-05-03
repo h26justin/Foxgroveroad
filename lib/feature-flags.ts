@@ -39,9 +39,9 @@ export const FEATURES = [
   },
   {
     name: 'oneshot_tasks',
-    label: 'One-shot tasks',
+    label: 'One-off tasks',
     description:
-      'Ad-hoc admin → cleaner tasks. Hides the "+ Post task" button and the One-shot section on the housekeeping page.',
+      'Ad-hoc admin → cleaner tasks. Hides the "+ Post task" button and the One-off section on the housekeeping page.',
   },
 ] as const
 

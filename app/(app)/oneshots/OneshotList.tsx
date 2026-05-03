@@ -71,7 +71,7 @@ export default function OneshotList({
   return (
     <section className="mb-8">
       <h2 className="fg-section-label mb-3">
-        One-shot tasks ({tasks.length})
+        One-off tasks ({tasks.length})
       </h2>
 
       {error && <div className="fg-msg-error mb-3">{error}</div>}

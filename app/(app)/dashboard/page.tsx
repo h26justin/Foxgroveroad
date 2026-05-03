@@ -54,7 +54,7 @@ export default async function DashboardPage() {
     dueTodayCountRes,
     completedTodayCountRes,
     openIssuesCountRes,
-    pendingOneshotsCountRes,
+    pendingOneshotsRes,
     pendingRequestsCountRes,
     flags,
     bedroomRoomsRes,
@@ -108,13 +108,18 @@ export default async function DashboardPage() {
           .select('id', { count: 'exact', head: true })
           .eq('status', 'open')
       : Promise.resolve({ count: 0 } as any),
-    // (3e) Pending one-shots
+    // (3e) Pending one-offs — full rows so the dashboard can show the
+    // descriptions in full (v32). Admin/cleaner only.
     showsTasks
       ? supabase
           .from('oneshot_tasks')
-          .select('id', { count: 'exact', head: true })
+          .select(
+            'id, description, priority, room_id, created_at, rooms:rooms!oneshot_tasks_room_id_fkey(name), creator:profiles!oneshot_tasks_created_by_fkey(full_name)',
+          )
           .eq('status', 'pending')
-      : Promise.resolve({ count: 0 } as any),
+          .order('priority', { ascending: false }) // urgent first
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] } as any),
     // (4) For admin: pending booking-request count (drives the badge
     // and the "review pending" quick action)
     isAdmin
@@ -142,7 +147,8 @@ export default async function DashboardPage() {
   const dueTodayCount = dueTodayCountRes.count ?? 0
   const completedTodayCount = completedTodayCountRes.count ?? 0
   const openIssuesCount = openIssuesCountRes.count ?? 0
-  const pendingOneshotsCount = pendingOneshotsCountRes.count ?? 0
+  const pendingOneshots = (pendingOneshotsRes.data as any[]) ?? []
+  const pendingOneshotsCount = pendingOneshots.length
   const pendingRequestsCount = pendingRequestsCountRes.count ?? 0
   const issuesEnabled = flags['issues'] !== false
   const oneshotsEnabled = flags['oneshot_tasks'] !== false
@@ -190,6 +196,99 @@ export default async function DashboardPage() {
           {greetingFor(profile.full_name)}
         </h1>
       </div>
+
+      {/* (0) Pending one-off tasks (v32) ----------------------------- */}
+      {showsTasks && oneshotsEnabled && pendingOneshots.length > 0 && (
+        <section className="mb-8">
+          <h2
+            className="mb-3 flex items-baseline gap-3 flex-wrap"
+            style={{
+              fontFamily: 'var(--font-serif)',
+              fontSize: 22,
+              color: 'var(--color-ink)',
+            }}
+          >
+            <span>One-off tasks</span>
+            <span
+              className="fg-mono text-xs"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              {pendingOneshots.length} pending
+            </span>
+          </h2>
+          <div className="space-y-2">
+            {pendingOneshots.map((t: any) => {
+              const isUrgent = t.priority === 'urgent'
+              const roomName = (t.rooms as any)?.name as string | undefined
+              const creator =
+                (t.creator as any)?.full_name as string | undefined
+              const created = new Date(t.created_at)
+              const ago = relativeFromCreated(created)
+              return (
+                <div
+                  key={t.id}
+                  className="fg-card p-4"
+                  style={
+                    isUrgent
+                      ? {
+                          borderLeftWidth: 4,
+                          borderLeftStyle: 'solid',
+                          borderLeftColor: 'var(--color-red, #b04030)',
+                        }
+                      : undefined
+                  }
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                      marginBottom: 6,
+                    }}
+                  >
+                    {isUrgent && (
+                      <span
+                        className="fg-pill text-xs"
+                        style={{
+                          background: 'var(--color-red, #b04030)',
+                          color: 'white',
+                        }}
+                      >
+                        urgent
+                      </span>
+                    )}
+                    {roomName && (
+                      <span
+                        className="fg-mono text-xs"
+                        style={{ color: 'var(--color-muted)' }}
+                      >
+                        {roomName}
+                      </span>
+                    )}
+                    <span
+                      className="fg-mono text-xs"
+                      style={{ color: 'var(--color-muted)', marginLeft: 'auto' }}
+                    >
+                      {creator ?? 'Admin'} · {ago}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      color: 'var(--color-ink)',
+                      fontSize: 14,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {t.description}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* (1) Right now in the house --------------------------------- */}
       <section className="mb-8">
@@ -417,14 +516,6 @@ export default async function DashboardPage() {
                 tone={openIssuesCount > 0 ? 'warn' : 'neutral'}
               />
             )}
-            {oneshotsEnabled && (
-              <StatCard
-                href="/housekeeping"
-                label="One-shot tasks"
-                value={pendingOneshotsCount}
-                tone={pendingOneshotsCount > 0 ? 'warn' : 'neutral'}
-              />
-            )}
           </div>
         </section>
       )}
@@ -572,6 +663,21 @@ function greetingFor(name: string): string {
   if (hour < 12) return `Good morning, ${first}.`
   if (hour < 18) return `Good afternoon, ${first}.`
   return `Good evening, ${first}.`
+}
+
+/** "5m ago" / "2h ago" / "yesterday" / "3d ago" — for ISO timestamps. */
+function relativeFromCreated(date: Date): string {
+  const ms = Date.now() - date.getTime()
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  return `${Math.floor(days / 30)}mo ago`
 }
 
 // ---------------------------------------------------------------------
