@@ -707,6 +707,7 @@ function RoomRow({
           <BookingBar
             key={b.id}
             booking={b}
+            roomName={room.name}
             startISO={startISO}
             totalDays={totalDays}
             isBeingDragged={draggingBookingId === b.id}
@@ -759,6 +760,7 @@ function DropPreview({
 
 function BookingBar({
   booking,
+  roomName,
   startISO,
   totalDays,
   isBeingDragged,
@@ -771,6 +773,7 @@ function BookingBar({
   onBookingTap,
 }: {
   booking: Booking
+  roomName: string
   startISO: string
   totalDays: number
   isBeingDragged: boolean
@@ -792,6 +795,8 @@ function BookingBar({
   const leftPx = visibleStart * DAY_WIDTH_PX
   const widthPx = (visibleEnd - visibleStart) * DAY_WIDTH_PX
   const name = booking.guest_name ?? booking.profiles?.full_name ?? 'Guest'
+  const nights = nightsBetween(booking.check_in, booking.check_out)
+  const dateStr = formatDateRange(booking.check_in, booking.check_out)
 
   // Single lane: keep the original 40px-tall bar at top:8.
   // Two or more lanes: switch to compact 22px bars stacked from top:4.
@@ -814,7 +819,6 @@ function BookingBar({
         fontSize: isCompact ? 10 : 11,
         opacity: isBeingDragged ? 0.35 : 1,
       }}
-      title={`${name} · ${formatDateRange(booking.check_in, booking.check_out)}\nDrag to move · Tap to manage`}
       onPointerDown={(e) => {
         startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() }
         movedRef.current = false
@@ -850,6 +854,12 @@ function BookingBar({
       }}
     >
       <span className="truncate">{name}</span>
+      <div className="fg-booking-bar-pop" aria-hidden="true">
+        <div className="fg-booking-bar-pop-name">{name}</div>
+        <div className="fg-booking-bar-pop-meta">
+          {roomName} · {dateStr} · {nights} night{nights === 1 ? '' : 's'}
+        </div>
+      </div>
     </div>
   )
 }

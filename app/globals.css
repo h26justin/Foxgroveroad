@@ -1082,6 +1082,45 @@ button, a, label, input[type="checkbox"] {
   transform: scale(1.02);
 }
 
+/* Hover popover — instant, styled, shows full guest + room + dates */
+.fg-booking-bar-pop {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  background: var(--color-ink);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.08s ease-out;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.fg-booking-bar-pop-name {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.fg-booking-bar-pop-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+.fg-booking-bar:hover .fg-booking-bar-pop {
+  opacity: 1;
+  visibility: visible;
+}
+/* Hide popover during drag — looks weird otherwise */
+.fg-booking-bar:active .fg-booking-bar-pop {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .fg-booking-ghost {
   position: fixed;
   pointer-events: none;
