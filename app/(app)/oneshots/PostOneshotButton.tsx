@@ -4,6 +4,7 @@ import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createOneshotTask } from './actions'
 import { uploadAttachment } from '../attachments/actions'
+import { floorLabel } from '@/lib/floors'
 
 const MAX_DIMENSION = 1600
 const JPEG_QUALITY = 0.85
@@ -22,7 +23,7 @@ const JPEG_QUALITY = 0.85
 export default function PostOneshotButton({
   rooms,
 }: {
-  rooms: { id: string; name: string; floor?: number }[]
+  rooms: { id: string; name: string; floor: number }[]
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -217,11 +218,32 @@ export default function PostOneshotButton({
               disabled={busy}
             >
               <option value="">— no specific room —</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
+              {(() => {
+                // Group rooms by floor, then render optgroups in
+                // top-to-bottom order matching the rest of the app:
+                // Attic (2) → First (1) → Ground (0) → Garden (-1) → House (-2)
+                const byFloor = new Map<number, typeof rooms>()
+                for (const r of rooms) {
+                  const arr = byFloor.get(r.floor) ?? []
+                  arr.push(r)
+                  byFloor.set(r.floor, arr)
+                }
+                const floors = Array.from(byFloor.keys()).sort((a, b) => b - a)
+                return floors.map((floor) => {
+                  const inFloor = (byFloor.get(floor) ?? [])
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                  return (
+                    <optgroup key={floor} label={floorLabel(floor)}>
+                      {inFloor.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                })
+              })()}
             </select>
           </div>
 
