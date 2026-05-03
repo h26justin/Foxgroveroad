@@ -198,10 +198,13 @@ export default function BookingsCalendar({
         const previewStartOffset = hoveredDateOffset - grabOffsetWithinBooking
 
         const rowRect = rowEl.getBoundingClientRect()
-        // Match BookingBar's "left + 2, top: 8" inset so the ghost overlays
-        // the dotted preview pixel-for-pixel.
+        // Match BookingBar's "left + 2" inset for X.
+        // For Y: center the ghost vertically in the target row, which
+        // works whether the row has 1 or N lanes. (The original "top + 8"
+        // assumption broke when rows could have variable heights from
+        // multi-guest stacking.)
         snappedX = rowRect.left + previewStartOffset * DAY_WIDTH_PX + 2
-        snappedY = rowRect.top + 8
+        snappedY = rowRect.top + (rowRect.height - 40) / 2
       }
     }
 
@@ -700,6 +703,7 @@ function RoomRow({
             previewStartDate={dragPreview.previewStartDate}
             durationDays={dragPreview.durationDays}
             totalDays={totalDays}
+            rowMinHeight={computedMinHeight}
           />
         )}
 
@@ -730,11 +734,13 @@ function DropPreview({
   previewStartDate,
   durationDays,
   totalDays,
+  rowMinHeight,
 }: {
   startISO: string
   previewStartDate: string
   durationDays: number
   totalDays: number
+  rowMinHeight: number
 }) {
   const startOffset = nightsBetween(startISO, previewStartDate)
   const endOffset = startOffset + durationDays
@@ -748,8 +754,8 @@ function DropPreview({
       style={{
         left: visibleStart * DAY_WIDTH_PX + 2,
         width: (visibleEnd - visibleStart) * DAY_WIDTH_PX - 4,
-        top: 8,
-        height: 40,
+        top: 4,
+        height: rowMinHeight - 8,
         border: '2px dashed var(--color-gold)',
         background: 'rgba(168, 134, 46, 0.15)',
         pointerEvents: 'none',
