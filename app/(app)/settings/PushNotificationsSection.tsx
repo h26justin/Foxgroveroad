@@ -134,7 +134,12 @@ export default function PushNotificationsSection() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
+        // Cast: TS's BufferSource expects Uint8Array<ArrayBuffer> but
+        // our helper returns the broader Uint8Array<ArrayBufferLike>.
+        // The runtime value is identical; this is purely a type widen.
+        applicationServerKey: urlBase64ToUint8Array(
+          VAPID_PUBLIC,
+        ) as BufferSource,
       })
       const json = sub.toJSON() as {
         endpoint?: string
