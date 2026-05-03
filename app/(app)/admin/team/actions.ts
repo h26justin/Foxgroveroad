@@ -390,3 +390,45 @@ export async function updateUserEmail(formData: FormData) {
     `/admin/team?saved=${encodeURIComponent(`Email updated to ${newEmail}`)}`,
   )
 }
+
+// =====================================================================
+// v30 — pending-approval gate
+// =====================================================================
+
+/**
+ * Approve a pending signup. Sets their role from 'pending' to whatever
+ * the admin picked (default: 'family'). After this they can sign in
+ * and access the app normally.
+ *
+ * Reject is just the existing deleteUser flow with a soft-delete —
+ * keeps the auth row but locks them out and frees the email.
+ */
+export async function approvePendingUser(formData: FormData) {
+  await requireAdmin()
+  const profileId = String(formData.get('profile_id') ?? '')
+  const newRole = String(formData.get('role') ?? 'family')
+
+  if (!profileId) {
+    redirect(`/admin/team?error=${encodeURIComponent('Missing profile')}`)
+  }
+  if (!['admin', 'family', 'cleaner'].includes(newRole)) {
+    redirect(
+      `/admin/team?error=${encodeURIComponent('Role must be admin, family, or cleaner')}`,
+    )
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role: newRole } as any)
+    .eq('id', profileId)
+    .eq('role', 'pending')
+  if (error) {
+    redirect(`/admin/team?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath('/admin/team')
+  redirect(
+    `/admin/team?saved=${encodeURIComponent(`Approved as ${newRole}`)}`,
+  )
+}

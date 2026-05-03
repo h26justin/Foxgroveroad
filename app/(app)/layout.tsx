@@ -12,6 +12,11 @@ export default async function AuthedLayout({
   const profile = await getCurrentProfile()
   if (!profile) redirect('/login')
 
+  // Pending users can't see anything in the authed shell — bounce
+  // them to /awaiting-approval. Done before any data fetches so we
+  // don't leak counts/booking info even if RLS happens to allow it.
+  if (profile.role === 'pending') redirect('/awaiting-approval')
+
   // Counts for nav badges. Both queries are independent — fire in
   // parallel. Pending only matters for admins; open-issue count matters
   // for admin + cleaner.

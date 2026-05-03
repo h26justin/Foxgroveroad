@@ -1,9 +1,10 @@
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { setUserRole, toggleCleanerActive, linkCleanerProfile } from './actions'
+import { setUserRole, toggleCleanerActive, linkCleanerProfile, approvePendingUser } from './actions'
 import InvitePersonForm from './InvitePersonForm'
 import UserActionsRow from './UserActionsRow'
+import PendingUserRow from './PendingUserRow'
 
 export default async function AdminTeamPage({
   searchParams,
@@ -63,8 +64,13 @@ export default async function AdminTeamPage({
     console.error('Failed to load auth metadata:', err)
   }
 
+  // Split profiles by role: pending users get their own section above
+  // the main people list (v30).
+  const pendingProfiles = (profiles ?? []).filter((p) => p.role === 'pending')
+  const activeProfiles = (profiles ?? []).filter((p) => p.role !== 'pending')
+
   // Profiles that could potentially be linked to a cleaner record
-  const linkableProfiles = (profiles ?? []).filter(
+  const linkableProfiles = activeProfiles.filter(
     (p) => p.role === 'cleaner' || p.role === 'family'
   )
 
@@ -118,11 +124,46 @@ export default async function AdminTeamPage({
 
       <InvitePersonForm />
 
+      {/* Pending approvals (v30) ----------------------------------- */}
+      {pendingProfiles.length > 0 && (
+        <section className="mb-12">
+          <h2 className="fg-section-label mb-3">
+            Awaiting approval · {pendingProfiles.length}
+          </h2>
+          <p
+            className="text-xs fg-mono mb-4"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            People who signed up themselves. They can't see anything in
+            the app until you approve them. Reject if you don't recognise
+            the name — it removes them from the list and frees the email.
+          </p>
+          <div className="space-y-3">
+            {pendingProfiles.map((p) => {
+              const meta = authMeta.get(p.id) ?? {
+                email: null,
+                lastSignIn: null,
+                banned: false,
+              }
+              return (
+                <PendingUserRow
+                  key={p.id}
+                  profileId={p.id}
+                  fullName={p.full_name}
+                  email={meta.email}
+                  signedUpAt={p.created_at}
+                />
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       {/* People */}
       <section className="mb-12">
         <h2 className="fg-section-label mb-3">People with accounts</h2>
         <div className="space-y-3">
-          {(profiles ?? []).map((p) => {
+          {activeProfiles.map((p) => {
             const meta = authMeta.get(p.id) ?? {
               email: null,
               lastSignIn: null,
