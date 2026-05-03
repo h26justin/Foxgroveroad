@@ -607,6 +607,42 @@ function RoomRow({
   dragPreview: { isThisRoom: boolean; previewStartDate: string; durationDays: number } | null
   onBookingTap?: (bookingId: string) => void
 }) {
+  // Compute "lane" assignment so overlapping bars stack vertically
+  // instead of covering each other. A lane is a horizontal track within
+  // the row. Two bookings can share a lane only if their date ranges
+  // don't overlap.
+  const sortedBookings = [...bookings].sort((a, b) => {
+    if (a.check_in !== b.check_in) return a.check_in.localeCompare(b.check_in)
+    return a.check_out.localeCompare(b.check_out)
+  })
+  const lanes: { laneEnd: string }[] = []
+  const laneByBookingId = new Map<string, number>()
+  for (const b of sortedBookings) {
+    let placed = false
+    for (let i = 0; i < lanes.length; i++) {
+      if (lanes[i].laneEnd <= b.check_in) {
+        lanes[i] = { laneEnd: b.check_out }
+        laneByBookingId.set(b.id, i)
+        placed = true
+        break
+      }
+    }
+    if (!placed) {
+      lanes.push({ laneEnd: b.check_out })
+      laneByBookingId.set(b.id, lanes.length - 1)
+    }
+  }
+  const laneCount = lanes.length || 1
+
+  // Row min-height grows with lane count
+  const COMPACT_BAR_H = 22
+  const COMPACT_GAP = 2
+  const TOP_INSET = 4
+  const computedMinHeight =
+    laneCount <= 1
+      ? 56
+      : TOP_INSET + laneCount * COMPACT_BAR_H + (laneCount - 1) * COMPACT_GAP + TOP_INSET
+
   return (
     <div
       className="flex border-b items-stretch"
@@ -632,7 +668,7 @@ function RoomRow({
       <div
         className="relative flex-1"
         data-room-row-id={room.id}
-        style={{ minHeight: 56, width: totalDays * DAY_WIDTH_PX }}
+        style={{ minHeight: computedMinHeight, width: totalDays * DAY_WIDTH_PX }}
       >
         {days.map((iso, i) => {
           const isWeekend = (() => {
@@ -674,6 +710,8 @@ function RoomRow({
             startISO={startISO}
             totalDays={totalDays}
             isBeingDragged={draggingBookingId === b.id}
+            lane={laneByBookingId.get(b.id) ?? 0}
+            laneCount={laneCount}
             onPointerDown={onPillPointerDown}
             onPointerMove={onPillPointerMove}
             onPointerUp={onPillPointerUp}
@@ -724,6 +762,8 @@ function BookingBar({
   startISO,
   totalDays,
   isBeingDragged,
+  lane,
+  laneCount,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -734,6 +774,8 @@ function BookingBar({
   startISO: string
   totalDays: number
   isBeingDragged: boolean
+  lane: number
+  laneCount: number
   onPointerDown: (e: React.PointerEvent, booking: Booking, x: number) => void
   onPointerMove: (e: React.PointerEvent) => void
   onPointerUp: (e: React.PointerEvent) => void
@@ -751,6 +793,12 @@ function BookingBar({
   const widthPx = (visibleEnd - visibleStart) * DAY_WIDTH_PX
   const name = booking.guest_name ?? booking.profiles?.full_name ?? 'Guest'
 
+  // Single lane: keep the original 40px-tall bar at top:8.
+  // Two or more lanes: switch to compact 22px bars stacked from top:4.
+  const isCompact = laneCount > 1
+  const barTop = isCompact ? 4 + lane * (22 + 2) : 8
+  const barHeight = isCompact ? 22 : 40
+
   // Tap-vs-drag detection
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const movedRef = useRef(false)
@@ -761,8 +809,9 @@ function BookingBar({
       style={{
         left: leftPx + 2,
         width: widthPx - 4,
-        top: 8,
-        height: 40,
+        top: barTop,
+        height: barHeight,
+        fontSize: isCompact ? 10 : 11,
         opacity: isBeingDragged ? 0.35 : 1,
       }}
       title={`${name} · ${formatDateRange(booking.check_in, booking.check_out)}\nDrag to move · Tap to manage`}
