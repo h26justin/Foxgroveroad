@@ -387,23 +387,15 @@ export default function BookingsCalendar({
         </div>
       </div>
 
-      {/* Drag ghost — snaps to where the booking will land when over a
-          valid cell, otherwise follows the cursor. */}
-      {drag && (
+      {/* Drag ghost — only visible when NOT over a valid drop target.
+          When the cursor is over a valid room/date cell, the in-row
+          dotted preview shows where the booking will land, and a
+          duplicate floating ghost just adds confusion. So we hide it
+          when snapped, leaving only the dotted preview. */}
+      {drag && drag.snappedX === null && (
         <div
           className="fg-booking-ghost"
-          style={
-            drag.snappedX !== null && drag.snappedY !== null
-              ? {
-                  left: drag.snappedX,
-                  top: drag.snappedY,
-                  width: drag.durationDays * DAY_WIDTH_PX - 4,
-                  height: 40,
-                  transform: 'none',
-                  opacity: 0.95,
-                }
-              : { left: drag.x, top: drag.y }
-          }
+          style={{ left: drag.x, top: drag.y }}
           aria-hidden
         >
           {drag.name}
