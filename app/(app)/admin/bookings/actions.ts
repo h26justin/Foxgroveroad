@@ -119,7 +119,9 @@ export async function moveBookingToRoomAndDates(
   // Fetch the booking we're moving
   const { data: booking, error: bookingErr } = await supabase
     .from('bookings')
-    .select('id, bed_id, beds:beds!bookings_bed_id_fkey(room_id, bed_type)')
+    .select(
+      'id, bed_id, request_id, beds:beds!bookings_bed_id_fkey(room_id, bed_type)',
+    )
     .eq('id', bookingId)
     .single()
   if (bookingErr || !booking) {
@@ -129,6 +131,7 @@ export async function moveBookingToRoomAndDates(
   const currentRoomId = (booking.beds as any)?.room_id
   const currentBedType = (booking.beds as any)?.bed_type
   const currentBedId = (booking as any).bed_id
+  const movingRequestId = (booking as any).request_id
 
   // Find candidate beds in the target room
   const { data: candidateBeds, error: bedsErr } = await supabase
@@ -141,18 +144,30 @@ export async function moveBookingToRoomAndDates(
   }
 
   // Find existing bookings on those beds that overlap the new dates,
-  // EXCLUDING the booking we're moving.
+  // EXCLUDING:
+  //   - the booking we're moving itself
+  //   - bookings that share the same request_id (couples sharing a bed
+  //     within the same booking is allowed — must match the trigger logic)
   const candidateBedIds = candidateBeds.map((b: any) => b.id)
   const { data: conflicts } = await supabase
     .from('bookings')
-    .select('id, bed_id')
+    .select('id, bed_id, request_id')
     .eq('status', 'approved')
     .in('bed_id', candidateBedIds)
     .lt('check_in', newCheckOut)
     .gt('check_out', newCheckIn)
     .neq('id', bookingId)
 
-  const conflictBedIds = new Set((conflicts ?? []).map((c: any) => c.bed_id))
+  const conflictBedIds = new Set(
+    (conflicts ?? [])
+      .filter((c: any) => {
+        // Treat as conflict only if it's a DIFFERENT booking_request.
+        // Null-request rows (legacy/orphan) are conservatively conflicts.
+        if (!c.request_id || !movingRequestId) return true
+        return c.request_id !== movingRequestId
+      })
+      .map((c: any) => c.bed_id),
+  )
 
   // If we're staying in the same room, prefer keeping the same bed.
   let chosenBedId: string | null = null
