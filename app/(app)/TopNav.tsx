@@ -27,6 +27,20 @@ export default function TopNav({
 
   // Item definition. `match` is the path-prefix that activates the highlight.
   const items: NavItem[] = [
+    // Dashboard tab — admin and family only. Cleaners go straight to
+    // Housekeeping and don't need a dashboard. Badge mirrors the House
+    // tab's pending-bookings count so admins can see it from anywhere.
+    ...(profile.role !== 'cleaner'
+      ? [
+          {
+            href: '/dashboard',
+            label: 'Dashboard',
+            icon: '📊',
+            match: '/dashboard',
+            badge: isAdmin && pendingCount > 0 ? pendingCount : undefined,
+          } satisfies NavItem,
+        ]
+      : []),
     {
       href: '/house',
       label: 'House',

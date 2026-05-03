@@ -12,16 +12,30 @@ import { requireAdmin } from '@/lib/auth'
 // =====================================================================
 
 /**
- * Best-effort site-URL for redirects in emails. Vercel exposes the
- * deployment URL via VERCEL_URL (without protocol). Fall back to the
- * production domain if env vars are missing.
+ * Best-effort site-URL for redirects in emails.
+ *
+ * Order:
+ *   1. NEXT_PUBLIC_SITE_URL (set in Vercel env vars — preferred)
+ *   2. The hardcoded production domain (the URL the allow-list lives at)
+ *   3. VERCEL_URL — only as a last-ditch fallback
+ *
+ * VERCEL_URL is the deployment-specific alias (foxgroveroad-h26justin-
+ * abc123.vercel.app), which won't match foxgroveroad.vercel.app/** in
+ * Supabase's allow-list. Putting it last avoids the silent fallback
+ * to bare Site URL we hit pre-v28.
  */
 function siteUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL
   if (explicit) return explicit.replace(/\/$/, '')
+  // Hardcoded prod URL second — it's the canonical domain registered
+  // in the Supabase allow-list, so redirects always match.
+  const fallback = 'https://foxgroveroad.vercel.app'
+  // Only use VERCEL_URL if neither of the above is available AND it
+  // happens to be the canonical domain (defensive: don't use a
+  // deployment-specific alias).
   const vercel = process.env.VERCEL_URL
-  if (vercel) return `https://${vercel}`
-  return 'https://foxgroveroad.vercel.app'
+  if (!vercel) return fallback
+  return vercel === 'foxgroveroad.vercel.app' ? `https://${vercel}` : fallback
 }
 
 /** Look up auth.users.email for a profile id. */

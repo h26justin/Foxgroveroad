@@ -44,10 +44,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Logged-in user on /login or /signup → /housekeeping
+  // Logged-in user on /login or /signup → / (root page routes by role)
   if (user && (path === '/login' || path === '/signup')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/housekeeping'
+    url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
