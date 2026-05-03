@@ -1,0 +1,1863 @@
+@import "tailwindcss";
+
+/* =====================================================================
+   FOXGROVE ROAD — Design tokens
+   ===================================================================== */
+
+@theme {
+  --color-cream:    #F4F3EF;
+  --color-surface:  #FFFFFF;
+  --color-card:     #FAFAF8;
+  --color-warm:     #E2DFD8;
+  --color-ink:      #1A1C26;
+  --color-slate:    #2D3C4A;
+  --color-muted:    #6B7191;
+  --color-faint:    #B0ADAB;
+
+  --color-gold:        #A8862E;
+  --color-gold-soft:   #C8A84B;
+  --color-green:       #1A9E65;
+  --color-red:         #CC3333;
+  --color-blue:        #2B6CB0;
+  --color-amber:       #B5720A;
+
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-mono:  'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html, body, #__next {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+/* iOS Safari niceties */
+html { -webkit-text-size-adjust: 100%; }
+button, a, label, input[type="checkbox"] {
+  -webkit-tap-highlight-color: rgba(168, 134, 46, 0.2);
+  touch-action: manipulation;
+}
+@media (max-width: 767px) {
+  .fg-input { font-size: 16px !important; }
+}
+
+/* --- Inputs --- */
+.fg-input {
+  font-family: var(--font-mono);
+  background: #fff;
+  border: 1.5px solid var(--color-warm);
+  color: var(--color-ink);
+  border-radius: 10px;
+  padding: 12px 14px;
+  width: 100%;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  min-height: 44px;
+}
+.fg-input:focus {
+  border-color: var(--color-slate);
+  box-shadow: 0 0 0 3px rgba(45, 60, 74, 0.08);
+}
+.fg-input::placeholder { color: var(--color-faint); }
+
+.fg-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+.fg-helptext {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 6px;
+}
+
+/* --- Buttons --- */
+.fg-btn-primary {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--color-slate);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 13px;
+  width: 100%;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s;
+  min-height: 48px;
+}
+.fg-btn-primary:hover:not(:disabled) { background: #1E2C38; }
+.fg-btn-primary:disabled { background: #A3A8AC; cursor: not-allowed; }
+
+.fg-btn-gold {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--color-gold-soft);
+  color: #1A2530;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 24px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+  min-height: 48px;
+}
+.fg-btn-gold:hover:not(:disabled) {
+  background: #B8942A;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(200, 168, 75, 0.3);
+}
+
+.fg-btn-ghost {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-slate);
+  border: 1.5px solid var(--color-warm);
+  border-radius: 10px;
+  padding: 13px 24px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s;
+  min-height: 44px;
+}
+.fg-btn-ghost:hover {
+  border-color: var(--color-slate);
+  background: var(--color-slate);
+  color: #fff;
+}
+
+/* --- Cards --- */
+.fg-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  border-radius: 16px;
+  padding: 24px;
+  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.fg-card-hover:hover {
+  border-color: rgba(200, 168, 75, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
+}
+.fg-card-elevated {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-warm);
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: 0 4px 32px rgba(45, 60, 74, 0.08);
+}
+
+/* --- Status pills --- */
+.fg-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+.fg-pill::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.fg-pill-green { background: rgba(26, 158, 101, 0.13); color: var(--color-green); }
+.fg-pill-red   { background: rgba(204, 51, 51, 0.13);  color: var(--color-red); }
+.fg-pill-gold  { background: rgba(168, 134, 46, 0.13); color: var(--color-gold); }
+.fg-pill-blue  { background: rgba(43, 108, 176, 0.13); color: var(--color-blue); }
+.fg-pill-amber { background: rgba(181, 114, 10, 0.13); color: var(--color-amber); }
+.fg-pill-muted { background: rgba(107, 113, 145, 0.13); color: var(--color-muted); }
+
+/* --- Tab / chip pills --- */
+.fg-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-warm);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+.fg-chip:hover { color: var(--color-ink); border-color: var(--color-faint); }
+.fg-chip-active {
+  background: rgba(168, 134, 46, 0.13);
+  color: var(--color-gold);
+  border-color: rgba(168, 134, 46, 0.4);
+  font-weight: 700;
+}
+
+/* Horizontal-scroll chip strip */
+.fg-chip-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 8px 0;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding-left: 4px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.fg-chip-strip::-webkit-scrollbar { height: 4px; }
+.fg-chip-strip::-webkit-scrollbar-thumb {
+  background: var(--color-warm);
+  border-radius: 2px;
+}
+
+/* --- Section labels --- */
+.fg-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.fg-mono { font-family: var(--font-mono); }
+
+/* --- Form messages --- */
+.fg-msg-error {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-red);
+  background: rgba(204, 51, 51, 0.08);
+  border: 1px solid rgba(204, 51, 51, 0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.fg-msg-success {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-green);
+  background: rgba(26, 158, 101, 0.08);
+  border: 1px solid rgba(26, 158, 101, 0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+/* =====================================================================
+   v7 — Top navigation
+   ===================================================================== */
+
+.fg-app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.fg-topnav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(180%) blur(10px);
+  -webkit-backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--color-warm);
+}
+.fg-topnav-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top, 0));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fg-topnav-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  flex-shrink: 0;
+  padding: 4px 6px;
+}
+.fg-topnav-logo-img {
+  height: 36px;
+  width: auto;
+  display: block;
+  /* Slight nudge so the house base aligns visually with text baseline */
+  margin-top: -2px;
+}
+.fg-topnav-logo-text {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+@media (max-width: 640px) {
+  .fg-topnav-logo-text { display: none; }
+  .fg-topnav-logo-img { height: 32px; }
+}
+
+.fg-topnav-items {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.fg-topnav-items::-webkit-scrollbar { display: none; }
+
+.fg-topnav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+  text-decoration: none;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  border: 1px solid transparent;
+}
+.fg-topnav-item:hover {
+  background: var(--color-card);
+  color: var(--color-ink);
+}
+.fg-topnav-item.is-active {
+  background: rgba(168, 134, 46, 0.1);
+  color: var(--color-gold);
+  border-color: rgba(168, 134, 46, 0.3);
+  font-weight: 700;
+}
+
+.fg-topnav-badge {
+  background: var(--color-gold);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 2px;
+  letter-spacing: 0;
+}
+
+.fg-topnav-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.fg-topnav-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-muted);
+}
+@media (max-width: 768px) {
+  .fg-topnav-name { display: none; }
+}
+.fg-topnav-logout {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-muted);
+  background: transparent;
+  border: 1px solid var(--color-warm);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.fg-topnav-logout:hover {
+  background: var(--color-warm);
+  color: var(--color-ink);
+}
+
+/* =====================================================================
+   v7 — Housekeeping room accordion
+   ===================================================================== */
+
+.fg-room-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.fg-room-card:has(.fg-room-header[aria-expanded="true"]) {
+  border-color: rgba(168, 134, 46, 0.35);
+}
+
+.fg-room-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.fg-room-header:hover {
+  background: var(--color-card);
+}
+.fg-room-header:active {
+  background: rgba(168, 134, 46, 0.08);
+}
+
+.fg-room-chevron {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--color-muted);
+  transform: rotate(0deg);
+  transition: transform 0.18s;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.fg-room-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.fg-room-name {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  flex: 1;
+  min-width: 0;
+}
+
+.fg-room-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fg-room-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.fg-room-badge-due {
+  background: rgba(204, 51, 51, 0.13);
+  color: var(--color-red);
+}
+.fg-room-badge-done {
+  background: rgba(26, 158, 101, 0.13);
+  color: var(--color-green);
+}
+
+.fg-room-body {
+  border-top: 1px solid var(--color-warm);
+  background: var(--color-cream);
+}
+
+/* Tap-row inside the accordion (lighter than v6's standalone version) */
+.fg-taprow {
+  display: flex;
+  align-items: stretch;
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: opacity 0.25s, transform 0.25s, max-height 0.4s, margin 0.4s;
+}
+.fg-taprow-check {
+  flex: 0 0 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-card);
+  border-right: 1px solid var(--color-warm);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  padding: 0;
+  font-family: inherit;
+}
+.fg-taprow-check:active { background: rgba(168, 134, 46, 0.15); }
+.fg-taprow-check-circle {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-faint);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #fff;
+}
+.fg-taprow-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.fg-taprow-name {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  color: var(--color-ink);
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fg-taprow-kind-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.fg-taprow-kind-turnover {
+  background: rgba(168, 134, 46, 0.15);
+  color: var(--color-gold);
+}
+.fg-taprow-kind-occupied {
+  background: rgba(46, 110, 168, 0.15);
+  color: var(--color-blue);
+}
+.fg-taprow-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.fg-taprow.is-completing {
+  opacity: 0;
+  transform: translateX(20px);
+  max-height: 0;
+  margin-top: -8px !important;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.fg-taprow.is-completing .fg-taprow-name {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+.fg-taprow.is-completing .fg-taprow-check-circle {
+  background: var(--color-green);
+  border-color: var(--color-green);
+}
+
+/* --- Completed sub-section inside a room --- */
+.fg-completed-section {
+  border-top: 1px dashed var(--color-warm);
+  background: rgba(26, 158, 101, 0.04);
+}
+.fg-completed-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-green);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: 0.02em;
+}
+.fg-completed-header:hover {
+  background: rgba(26, 158, 101, 0.07);
+}
+.fg-completed-count {
+  margin-left: auto;
+  background: var(--color-green);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.fg-completed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgba(26, 158, 101, 0.06);
+  border-radius: 8px;
+}
+.fg-completed-check {
+  color: var(--color-green);
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.fg-completed-name {
+  flex: 1;
+  color: var(--color-ink);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-faint);
+}
+.fg-completed-time {
+  color: var(--color-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* --- Toast --- */
+.fg-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0) + 16px);
+  z-index: 50;
+  background: var(--color-ink);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: calc(100vw - 32px);
+  animation: fg-toast-in 0.25s ease-out;
+}
+.fg-toast-undo {
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.fg-toast-undo:hover { background: rgba(255,255,255,0.15); }
+@keyframes fg-toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* --- Skeleton loader --- */
+.fg-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-warm) 0%,
+    rgba(226, 223, 216, 0.5) 50%,
+    var(--color-warm) 100%
+  );
+  background-size: 200% 100%;
+  animation: fg-skeleton-shimmer 1.4s infinite;
+  border-radius: 8px;
+}
+@keyframes fg-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* =====================================================================
+   v7b — Bedroom organiser (drag-and-drop)
+   ===================================================================== */
+
+.fg-bedroom-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.fg-bedroom-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-warm);
+}
+.fg-bedroom-name {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  flex: 1;
+}
+
+.fg-bed-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  padding: 10px;
+}
+
+.fg-bed-slot {
+  background: var(--color-card);
+  border: 1.5px dashed transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.fg-bed-slot.is-dropzone {
+  border-color: var(--color-warm);
+}
+.fg-bed-slot.is-hovered {
+  background: rgba(168, 134, 46, 0.12);
+  border-color: var(--color-gold);
+  border-style: solid;
+}
+.fg-bed-slot.is-blocked {
+  background: rgba(204, 51, 51, 0.05);
+  border-color: rgba(204, 51, 51, 0.2);
+  border-style: solid;
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.fg-bed-slot.is-blocked .fg-bed-empty {
+  color: var(--color-red);
+  opacity: 0.65;
+}
+.fg-bed-blocked-tag {
+  margin-left: auto;
+  background: rgba(204, 51, 51, 0.13);
+  color: var(--color-red);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fg-bed-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fg-bed-type {
+  background: rgba(107, 113, 145, 0.12);
+  color: var(--color-muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+
+.fg-pill-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.fg-bed-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-faint);
+  letter-spacing: 0.04em;
+}
+
+/* The actual draggable pill */
+.fg-pill-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.fg-pill-guest {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(43, 108, 176, 0.13);
+  color: var(--color-blue);
+  border: 1.5px solid rgba(43, 108, 176, 0.3);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  white-space: nowrap;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.fg-pill-guest:active {
+  cursor: grabbing;
+  transform: scale(1.04);
+  box-shadow: 0 4px 12px rgba(43, 108, 176, 0.3);
+}
+.fg-pill-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid var(--color-surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+.fg-pill-remove:hover { background: #aa2222; }
+
+/* Floating ghost while dragging */
+.fg-pill-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate(-50%, -50%) scale(1.1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--color-blue);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+/* Pre-arrival inline checklist */
+.fg-prearrival-list {
+  border-top: 1px dashed var(--color-warm);
+  padding: 10px 12px 12px;
+  background: var(--color-card);
+}
+.fg-prearrival-header {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin-bottom: 8px;
+}
+.fg-prearrival-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 6px 4px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(168, 134, 46, 0.15);
+  border-radius: 6px;
+}
+.fg-prearrival-item:hover { background: rgba(168, 134, 46, 0.06); }
+.fg-prearrival-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--color-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  background: #fff;
+}
+.fg-prearrival-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-ink);
+  flex: 1;
+}
+.fg-prearrival-item.is-checked .fg-prearrival-box {
+  background: var(--color-green);
+  border-color: var(--color-green);
+}
+.fg-prearrival-item.is-checked .fg-prearrival-name {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+/* =====================================================================
+   v7c — Linen tracking
+   ===================================================================== */
+
+.fg-linen-row {
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.fg-linen-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+}
+.fg-linen-size {
+  background: rgba(107, 113, 145, 0.12);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.fg-linen-totals {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-green);
+}
+.fg-linen-totals.is-short { color: var(--color-red); }
+
+.fg-linen-counters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.fg-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+  border-radius: 8px;
+  padding: 4px 6px;
+  flex: 1 1 auto;
+  min-width: 102px;
+}
+.fg-counter-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 4px;
+  flex: 1;
+}
+.fg-counter-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+.fg-counter-btn:hover:not(:disabled) {
+  background: var(--color-warm);
+}
+.fg-counter-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.fg-counter-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 22px;
+  text-align: center;
+}
+
+/* =====================================================================
+   v7bc — Bookings calendar (draggable bars)
+   ===================================================================== */
+
+.fg-booking-bar {
+  position: absolute;
+  background: var(--color-green);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  /* No overflow:hidden here — the .truncate child clips text, and we
+     need the popover (positioned above) to be visible outside this box. */
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.1s;
+  z-index: 1;
+}
+/* The text span clips when the bar is too narrow */
+.fg-booking-bar > .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.fg-booking-bar:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+.fg-booking-bar:active {
+  cursor: grabbing;
+  transform: scale(1.02);
+}
+
+/* Hover popover — instant, styled, shows full guest + room + dates */
+.fg-booking-bar-pop {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  background: var(--color-ink);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.08s ease-out;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.fg-booking-bar-pop-name {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.fg-booking-bar-pop-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+.fg-booking-bar:hover .fg-booking-bar-pop {
+  opacity: 1;
+  visibility: visible;
+}
+/* Hide popover during drag — looks weird otherwise */
+.fg-booking-bar:active .fg-booking-bar-pop {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.fg-booking-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  background: var(--color-green);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =====================================================================
+   v8 — Housekeeping floor groupings + custom-order drag
+   ===================================================================== */
+
+.fg-floor-group {
+  margin-bottom: 24px;
+}
+.fg-floor-group:last-child {
+  margin-bottom: 0;
+}
+.fg-floor-heading {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+  margin: 0 0 8px 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-warm);
+}
+
+.fg-room-header-wrap {
+  display: flex;
+  align-items: stretch;
+}
+
+.fg-room-handle {
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  border-right: 1px solid var(--color-warm);
+  background: var(--color-card);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  letter-spacing: -2px;
+  transition: background 0.15s, color 0.15s;
+}
+.fg-room-handle:hover {
+  background: rgba(168, 134, 46, 0.1);
+  color: var(--color-gold);
+}
+.fg-room-handle:active {
+  cursor: grabbing;
+}
+
+.fg-room-card.is-dragging {
+  opacity: 0.4;
+}
+.fg-room-card.is-drop-target {
+  border-top: 3px solid var(--color-gold);
+  margin-top: -3px;
+}
+
+.fg-room-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate(-50%, -50%);
+  background: var(--color-surface);
+  border: 2px solid var(--color-gold);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  padding: 12px 20px;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   v9 — Booking request form (sharing, children, age bands)
+   ===================================================================== */
+
+.fg-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--color-warm);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--color-surface);
+}
+.fg-radio-row:hover {
+  border-color: var(--color-faint);
+}
+.fg-radio-row[data-checked="1"] {
+  border-color: var(--color-gold);
+  background: rgba(168, 134, 46, 0.08);
+}
+.fg-radio-row input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.fg-radio-label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.fg-child-row {
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.fg-child-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+/* =====================================================================
+   v11 — Unified House page: status strip, slide-over panel
+   ===================================================================== */
+
+/* Status strip — chips horizontally across the top */
+.fg-status-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.fg-status-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+}
+.fg-status-chip-count {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.fg-status-chip-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.fg-status-chip-amber .fg-status-chip-count { color: var(--color-amber); }
+.fg-status-chip-red   .fg-status-chip-count { color: var(--color-red); }
+.fg-status-chip-blue  .fg-status-chip-count { color: var(--color-blue); }
+
+/* Pending request card buttons */
+.fg-pending-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--color-cream);
+  border: 1px solid var(--color-warm);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.fg-pending-card:hover {
+  border-color: var(--color-faint);
+  background: var(--color-card);
+}
+
+/* ─── Slide-over panel ─── */
+.fg-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 35, 36, 0.4);
+  z-index: 90;
+  animation: fg-fade-in 0.15s ease-out;
+}
+@keyframes fg-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fg-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 480px;
+  max-width: 100vw;
+  background: var(--color-cream);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.18);
+  animation: fg-panel-slide-in 0.2s ease-out;
+}
+@keyframes fg-panel-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.fg-panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-warm);
+  background: var(--color-card);
+}
+.fg-panel-close {
+  font-size: 24px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--color-warm);
+  background: var(--color-cream);
+  color: var(--color-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.fg-panel-close:hover {
+  background: var(--color-card);
+  color: var(--color-ink);
+}
+.fg-panel-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0;
+}
+.fg-panel-section {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-warm);
+}
+.fg-panel-room {
+  background: var(--color-card);
+  border: 1px solid var(--color-warm);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* Bed slots inside the panel */
+.fg-panel-bed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1.5px dashed var(--color-warm);
+  border-radius: 6px;
+  background: var(--color-cream);
+}
+.fg-panel-bed.is-dropzone {
+  border-style: dashed;
+  background: rgba(168, 134, 46, 0.04);
+}
+.fg-panel-bed.is-hovered {
+  border-color: var(--color-gold);
+  border-style: solid;
+  background: rgba(168, 134, 46, 0.12);
+}
+.fg-panel-bed.is-blocked {
+  border-color: rgba(204, 51, 51, 0.2);
+  border-style: solid;
+  background: rgba(204, 51, 51, 0.05);
+  opacity: 0.75;
+}
+.fg-panel-bed-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fg-panel-bed-type {
+  background: var(--color-warm);
+  color: var(--color-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fg-panel-bed-blocked {
+  margin-left: auto;
+  background: rgba(204, 51, 51, 0.13);
+  color: var(--color-red);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fg-panel-bed-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 32px;
+}
+.fg-panel-bed-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  opacity: 0.6;
+}
+
+/* Guest pill inside the panel */
+.fg-panel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(46, 110, 168, 0.13);
+  color: var(--color-blue);
+  border: 1px solid rgba(46, 110, 168, 0.3);
+  border-radius: 999px;
+  padding: 4px 4px 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.fg-panel-pill:active {
+  cursor: grabbing;
+}
+.fg-panel-pill-name {
+  font-weight: 600;
+}
+.fg-panel-pill-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(204, 51, 51, 0.85);
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fg-panel-pill-ghost {
+  position: fixed;
+  background: var(--color-blue);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 200;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+/* Pre-arrival check rows in the panel */
+.fg-panel-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+.fg-panel-check:hover {
+  background: var(--color-cream);
+}
+.fg-panel-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-green);
+  cursor: pointer;
+}
+.fg-panel-check .is-done {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+/* Mobile: panel goes full-screen */
+@media (max-width: 700px) {
+  .fg-panel {
+    width: 100vw;
+  }
+  .fg-status-strip {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .fg-status-chip {
+    flex-shrink: 0;
+  }
+}
+
+/* =====================================================================
+   v12 — Attachment gallery + lightbox
+   ===================================================================== */
+
+.fg-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.fg-attachment-thumb {
+  position: relative;
+  aspect-ratio: 1;
+}
+.fg-attachment-thumb-button {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--color-warm);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--color-cream);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.fg-attachment-thumb-button:hover {
+  border-color: var(--color-faint);
+}
+.fg-attachment-thumb-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fg-attachment-thumb-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fg-attachment-thumb-delete:hover {
+  background: var(--color-red);
+}
+.fg-attachment-thumb-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 12px 6px 4px;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 0 0 6px 6px;
+}
+
+/* Lightbox — full-screen photo viewer */
+.fg-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fg-fade-in 0.15s ease-out;
+}
+.fg-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  cursor: default;
+}
+.fg-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fg-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: none;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.fg-lightbox-prev { left: 16px; }
+.fg-lightbox-next { right: 16px; }
+.fg-lightbox-caption {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  max-width: 80vw;
+}
+
+/* =====================================================================
+   v13 — Modal (used by issue reporting + resolve)
+   ===================================================================== */
+
+.fg-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  background: var(--color-cream);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fg-modal-pop-in 0.15s ease-out;
+}
+@keyframes fg-modal-pop-in {
+  from { opacity: 0; transform: translate(-50%, -48%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+.fg-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--color-warm);
+  background: var(--color-card);
+}
+.fg-modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.fg-modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-warm);
+  background: var(--color-card);
+}
+
+/* Issue summary pill on housekeeping room headers */
+.fg-room-issue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(181, 114, 10, 0.15);
+  color: var(--color-amber);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+}
+
+/* =====================================================================
+   v16 — Pre-arrival on housekeeping page
+   ===================================================================== */
+
+.fg-room-prearrival-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(168, 134, 46, 0.18);
+  color: var(--color-gold);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+}
+
+.fg-prearrival-section {
+  background: rgba(168, 134, 46, 0.06);
+  border-bottom: 1px solid rgba(168, 134, 46, 0.2);
+  padding: 12px 14px;
+}
+.fg-prearrival-header {
+  margin-bottom: 8px;
+}
+.fg-prearrival-title {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  color: var(--color-ink);
+}
+.fg-prearrival-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 2px;
+}
+.fg-prearrival-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fg-prearrival-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+.fg-prearrival-row:hover {
+  background: rgba(168, 134, 46, 0.08);
+}
+.fg-prearrival-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+}
+.fg-prearrival-row .is-done {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+/* =====================================================================
+   v17 — Accessibility: larger-text mode
+   =====================================================================
+   Opt-in scaling. Targets readability for cleaners + older users.
+   Doesn't override fixed-size monospace metadata (timestamps, codes etc.)
+   because those are designed to be terse — bumping them doesn't help. */
+
+.fg-acc-large {
+  font-size: 18px;
+  line-height: 1.55;
+}
+.fg-acc-large .fg-room-name { font-size: 20px; }
+.fg-acc-large .fg-taprow-name { font-size: 17px; }
+.fg-acc-large .fg-prearrival-row { font-size: 16px; }
+.fg-acc-large .fg-prearrival-title { font-size: 16px; }
+.fg-acc-large .fg-input { font-size: 17px; }
+.fg-acc-large .fg-label { font-size: 13px; }
+.fg-acc-large h1 { font-size: 2.1em; }
+.fg-acc-large h2 { font-size: 1.5em; }
+.fg-acc-large .fg-btn-primary,
+.fg-acc-large .fg-btn-gold,
+.fg-acc-large .fg-btn-ghost {
+  font-size: 15px;
+}
+/* Bigger touch targets for tickable rows */
+.fg-acc-large .fg-prearrival-row input[type='checkbox'],
+.fg-acc-large .fg-panel-check input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
