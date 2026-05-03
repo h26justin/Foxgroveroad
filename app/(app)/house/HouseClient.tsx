@@ -78,6 +78,7 @@ export default function HouseClient({
   allChildren,
   templates,
   checks,
+  profileNotesById,
   statusCounts,
   selectedBookingId,
   selectedRequestId,
@@ -100,6 +101,16 @@ export default function HouseClient({
   allChildren: ChildRow[]
   templates: Template[]
   checks: Check[]
+  profileNotesById: Record<
+    string,
+    {
+      dietary_notes: string | null
+      allergies: string | null
+      room_preference: string | null
+      things_they_bring: string | null
+      general_notes: string | null
+    }
+  >
   statusCounts: {
     stayingTonight: number
     arrivingTomorrow: number
@@ -355,6 +366,11 @@ export default function HouseClient({
               selectedRequest
                 ? checks.filter((c) => c.booking_request_id === selectedRequest.id)
                 : []
+            }
+            requesterNotes={
+              selectedRequest && profileNotesById[selectedRequest.requested_by]
+                ? profileNotesById[selectedRequest.requested_by]
+                : null
             }
             onClose={closePanel}
           />

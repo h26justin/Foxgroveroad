@@ -88,6 +88,7 @@ export default function BookingPanel({
   childrenForRequest,
   templates,
   checksForRequest,
+  requesterNotes,
   onClose,
 }: {
   profile: Profile
@@ -99,6 +100,13 @@ export default function BookingPanel({
   childrenForRequest: ChildRow[]
   templates: Template[]
   checksForRequest: Check[]
+  requesterNotes: {
+    dietary_notes: string | null
+    allergies: string | null
+    room_preference: string | null
+    things_they_bring: string | null
+    general_notes: string | null
+  } | null
   onClose: () => void
 }) {
   const router = useRouter()
@@ -624,6 +632,66 @@ export default function BookingPanel({
           </div>
         )}
 
+        {/* ── Profile notes (admin only) ── */}
+        {isAdmin && primaryRequest && requesterNotes && hasAnyNotes(requesterNotes) && (
+          <div className="fg-panel-section">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <h3 className="fg-section-label" style={{ marginBottom: 0 }}>
+                About {primaryRequest.profiles?.full_name ?? 'this guest'}
+              </h3>
+              <a
+                href={`/admin/profiles/${primaryRequest.requested_by}`}
+                className="text-xs fg-mono"
+                style={{
+                  color: 'var(--color-blue)',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Edit profile →
+              </a>
+            </div>
+            <div className="space-y-2">
+              {requesterNotes.allergies && (
+                <NoteRow
+                  icon="⚠"
+                  label="Allergies"
+                  text={requesterNotes.allergies}
+                  emphasis
+                />
+              )}
+              {requesterNotes.dietary_notes && (
+                <NoteRow
+                  icon="🍴"
+                  label="Dietary"
+                  text={requesterNotes.dietary_notes}
+                />
+              )}
+              {requesterNotes.room_preference && (
+                <NoteRow
+                  icon="🛏"
+                  label="Room"
+                  text={requesterNotes.room_preference}
+                />
+              )}
+              {requesterNotes.things_they_bring && (
+                <NoteRow
+                  icon="🎒"
+                  label="Brings"
+                  text={requesterNotes.things_they_bring}
+                />
+              )}
+              {requesterNotes.general_notes && (
+                <NoteRow
+                  icon="💭"
+                  label="Notes"
+                  text={requesterNotes.general_notes}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Group makeup ── */}
         {primaryRequest && adultsLine && (
           <div className="fg-panel-section">
@@ -974,3 +1042,52 @@ function PanelPill({
 }
 
 
+
+// ─── Profile-notes helpers (admin-only display) ──────────────────────────
+
+function hasAnyNotes(notes: {
+  dietary_notes: string | null
+  allergies: string | null
+  room_preference: string | null
+  things_they_bring: string | null
+  general_notes: string | null
+}): boolean {
+  return Boolean(
+    notes.dietary_notes ||
+      notes.allergies ||
+      notes.room_preference ||
+      notes.things_they_bring ||
+      notes.general_notes,
+  )
+}
+
+function NoteRow({
+  icon,
+  label,
+  text,
+  emphasis,
+}: {
+  icon: string
+  label: string
+  text: string
+  emphasis?: boolean
+}) {
+  return (
+    <div
+      className="text-sm px-3 py-2 rounded"
+      style={{
+        background: emphasis
+          ? 'rgba(181, 114, 10, 0.08)'
+          : 'var(--color-cream)',
+        color: emphasis ? 'var(--color-amber)' : 'var(--color-ink)',
+      }}
+    >
+      <span style={{ fontWeight: 600, marginRight: 6 }}>
+        {icon} {label}:
+      </span>
+      <span style={{ color: emphasis ? 'var(--color-ink)' : 'inherit' }}>
+        {text}
+      </span>
+    </div>
+  )
+}

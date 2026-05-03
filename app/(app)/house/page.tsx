@@ -138,6 +138,42 @@ export default async function HousePage({
   const checks = (checksRes.data as any[]) ?? []
   const pendingCount = pendingCountRes.count ?? 0
 
+  // Admin-only: fetch profile notes for every requester whose request is
+  // visible. The slide-over surfaces these as a condensed read-only
+  // summary. Cleaner/family users never see other people's notes.
+  const profileNotesById: Record<
+    string,
+    {
+      dietary_notes: string | null
+      allergies: string | null
+      room_preference: string | null
+      things_they_bring: string | null
+      general_notes: string | null
+    }
+  > = {}
+  if (isAdmin) {
+    const requesterIds = Array.from(
+      new Set(visibleRequests.map((r: any) => r.requested_by).filter(Boolean)),
+    )
+    if (requesterIds.length > 0) {
+      const { data: notesRows } = await supabase
+        .from('profiles')
+        .select(
+          'id, dietary_notes, allergies, room_preference, things_they_bring, general_notes',
+        )
+        .in('id', requesterIds)
+      for (const r of (notesRows as any[]) ?? []) {
+        profileNotesById[r.id] = {
+          dietary_notes: r.dietary_notes,
+          allergies: r.allergies,
+          room_preference: r.room_preference,
+          things_they_bring: r.things_they_bring,
+          general_notes: r.general_notes,
+        }
+      }
+    }
+  }
+
   // Compute "needs beds" count
   const needsBedsCount =
     ((needsBedsRes.data as any[]) ?? []).filter(
@@ -193,6 +229,7 @@ export default async function HousePage({
       allChildren={allChildren}
       templates={templates}
       checks={checks}
+      profileNotesById={profileNotesById}
       statusCounts={{
         stayingTonight,
         arrivingTomorrow,
