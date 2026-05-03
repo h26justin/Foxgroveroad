@@ -64,23 +64,31 @@ export default async function IssuesPage({
     photos: photosMap.get(r.id) ?? [],
   }))
 
-  // Counts for the filter toggle
-  const { count: openCount } = await supabase
-    .from('issues')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'open')
-  const { count: resolvedCount } = await supabase
-    .from('issues')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'resolved')
+  // Counts for the filter toggle, plus rooms for the "+ Report issue" picker
+  const [openCountRes, resolvedCountRes, roomsRes] = await Promise.all([
+    supabase
+      .from('issues')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open'),
+    supabase
+      .from('issues')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'resolved'),
+    supabase
+      .from('rooms')
+      .select('id, name, floor')
+      .order('floor', { ascending: false })
+      .order('name'),
+  ])
 
   return (
     <IssuesClient
       profile={profile}
       issues={issues}
       filter={filter}
-      openCount={openCount ?? 0}
-      resolvedCount={resolvedCount ?? 0}
+      openCount={openCountRes.count ?? 0}
+      resolvedCount={resolvedCountRes.count ?? 0}
+      rooms={(roomsRes.data as any[]) ?? []}
       savedMessage={sp.saved ?? null}
       errorMessage={sp.error ?? null}
     />

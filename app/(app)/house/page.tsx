@@ -138,12 +138,19 @@ export default async function HousePage({
   const checks = (checksRes.data as any[]) ?? []
   const pendingCount = pendingCountRes.count ?? 0
 
-  // Admin-only: fetch profile notes for every requester whose request is
-  // visible. The slide-over surfaces these as a condensed read-only
-  // summary. Cleaner/family users never see other people's notes.
-  const profileNotesById: Record<
+  // Admin-only: fetch guest notes for every requester whose request is
+  // visible, by joining on guests.linked_profile_id. The slide-over
+  // surfaces these as a condensed read-only summary. Cleaner/family
+  // users never see other people's notes (this fetch is gated on isAdmin).
+  //
+  // The map is keyed by the requester's profile id (i.e. the
+  // booking_request's requested_by) so the panel can look up notes for
+  // whoever owns the selected request.
+  const requesterGuestNotesById: Record<
     string,
     {
+      guest_id: string
+      full_name: string
       dietary_notes: string | null
       allergies: string | null
       room_preference: string | null
@@ -156,19 +163,22 @@ export default async function HousePage({
       new Set(visibleRequests.map((r: any) => r.requested_by).filter(Boolean)),
     )
     if (requesterIds.length > 0) {
-      const { data: notesRows } = await supabase
-        .from('profiles')
+      const { data: guestRows } = await supabase
+        .from('guests')
         .select(
-          'id, dietary_notes, allergies, room_preference, things_they_bring, general_notes',
+          'id, full_name, linked_profile_id, dietary_notes, allergies, room_preference, things_they_bring, general_notes',
         )
-        .in('id', requesterIds)
-      for (const r of (notesRows as any[]) ?? []) {
-        profileNotesById[r.id] = {
-          dietary_notes: r.dietary_notes,
-          allergies: r.allergies,
-          room_preference: r.room_preference,
-          things_they_bring: r.things_they_bring,
-          general_notes: r.general_notes,
+        .in('linked_profile_id', requesterIds)
+      for (const g of (guestRows as any[]) ?? []) {
+        if (!g.linked_profile_id) continue
+        requesterGuestNotesById[g.linked_profile_id] = {
+          guest_id: g.id,
+          full_name: g.full_name,
+          dietary_notes: g.dietary_notes,
+          allergies: g.allergies,
+          room_preference: g.room_preference,
+          things_they_bring: g.things_they_bring,
+          general_notes: g.general_notes,
         }
       }
     }
@@ -229,7 +239,7 @@ export default async function HousePage({
       allChildren={allChildren}
       templates={templates}
       checks={checks}
-      profileNotesById={profileNotesById}
+      requesterGuestNotesById={requesterGuestNotesById}
       statusCounts={{
         stayingTonight,
         arrivingTomorrow,

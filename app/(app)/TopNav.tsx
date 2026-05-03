@@ -74,10 +74,10 @@ export default function TopNav({
             match: '/admin/team',
           } satisfies NavItem,
           {
-            href: '/admin/profiles',
-            label: 'Profiles',
-            icon: '📇',
-            match: '/admin/profiles',
+            href: '/admin/guests',
+            label: 'Guests',
+            icon: '🧳',
+            match: '/admin/guests',
           } satisfies NavItem,
           {
             href: '/pay',

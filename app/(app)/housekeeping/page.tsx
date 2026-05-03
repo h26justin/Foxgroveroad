@@ -27,8 +27,13 @@ export default async function HousekeepingPage({
     return d.toISOString().split('T')[0]
   })()
 
-  // Six queries fire in parallel — adds upcoming bookings + pre-arrival
-  // templates + existing checks for the v16 prearrival-on-housekeeping feature.
+  // Seven queries fire in parallel.
+  //
+  // The "all completions" query is a defensive override: the
+  // cleaner_tasks_today view computes last_completed_date itself, but
+  // we've seen cases where its value is stale even after revalidation.
+  // We query task_completions directly and override the view's value
+  // per task. This is cheap (text-only data, indexed by template).
   const [
     dueRowsRes,
     completionsRes,
@@ -37,6 +42,7 @@ export default async function HousekeepingPage({
     openIssuesRes,
     upcomingBookingsRes,
     prearrivalTemplatesRes,
+    allCompletionsRes,
   ] = await Promise.all([
     supabase
       .from('cleaner_tasks_today')
@@ -67,10 +73,6 @@ export default async function HousekeepingPage({
       .from('issues')
       .select('id, room_id')
       .eq('status', 'open'),
-    // Bookings whose check-in is between today and five days out — these
-    // are the active "prep this room" prompts. Joined to beds for room_id
-    // and to booking_requests for the dates and the request id we'll FK
-    // pre-arrival checks against.
     supabase
       .from('bookings')
       .select(
@@ -84,7 +86,62 @@ export default async function HousekeepingPage({
       .from('prearrival_templates')
       .select('id, room_id, name, position')
       .order('position'),
+    // Defensive: the most recent completion per task. Read all
+    // completions (template_id + completed_at_date) and reduce to a
+    // map client-side. Limited to past 365 days to keep size bounded.
+    (() => {
+      const yearAgo = (() => {
+        const d = new Date(today + 'T00:00:00')
+        d.setDate(d.getDate() - 365)
+        return d.toISOString().split('T')[0]
+      })()
+      return supabase
+        .from('task_completions')
+        .select('task_template_id, completed_at_date')
+        .gte('completed_at_date', yearAgo)
+        .order('completed_at_date', { ascending: false })
+    })(),
   ])
+
+  // Build map of task_template_id → most recent completion date
+  const lastCompletedByTemplate = new Map<string, string>()
+  for (const c of (allCompletionsRes.data as any[]) ?? []) {
+    if (!c.task_template_id) continue
+    const existing = lastCompletedByTemplate.get(c.task_template_id)
+    if (!existing || c.completed_at_date > existing) {
+      lastCompletedByTemplate.set(c.task_template_id, c.completed_at_date)
+    }
+  }
+
+  // Apply override to dueTasks: replace last_completed_date, and filter
+  // out tasks that have been completed recently enough that they
+  // shouldn't be in the due/overdue list. Don't trust the view's status
+  // alone — its computation can lag actual completions.
+  const dueRows = ((dueRowsRes.data as any[]) ?? [])
+    .map((t) => {
+      const real = lastCompletedByTemplate.get(t.id)
+      if (!real) return t // nothing in completions, view's value stands
+      const daysSince = Math.floor(
+        (new Date(today + 'T00:00:00').getTime() -
+          new Date(real + 'T00:00:00').getTime()) /
+          86400000,
+      )
+      const freq = t.frequency_days ?? 0
+      // If the task has a frequency and it's been completed within the
+      // window, it shouldn't show as due. Mark it for filtering by
+      // returning null.
+      if (freq > 0 && daysSince < freq) {
+        return null
+      }
+      return {
+        ...t,
+        last_completed_date: real,
+        // Recompute days_overdue from real completion. If freq is 0
+        // (one-shot), days_overdue is just daysSince.
+        days_overdue: freq > 0 ? Math.max(0, daysSince - freq) : daysSince,
+      }
+    })
+    .filter((t): t is NonNullable<typeof t> => t !== null)
 
   // Build a per-room open-issues count from the open issues list.
   const openIssuesByRoom = new Map<string, number>()
@@ -179,7 +236,7 @@ export default async function HousekeepingPage({
 
   return (
     <HousekeepingClient
-      dueTasks={(dueRowsRes.data as any[]) ?? []}
+      dueTasks={dueRows}
       completions={(completionsRes.data as any[]) ?? []}
       rooms={(roomsRes.data as any[]) ?? []}
       roomOrder={(roomOrderRes.data as any[]) ?? []}

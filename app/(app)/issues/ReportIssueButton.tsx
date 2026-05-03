@@ -23,22 +23,40 @@ const JPEG_QUALITY = 0.85
 export default function ReportIssueButton({
   roomId,
   roomName,
+  rooms,
   buttonClassName = 'text-xs fg-mono',
   buttonStyle,
+  buttonLabel,
 }: {
-  roomId: string
-  roomName: string
+  roomId?: string
+  roomName?: string
+  /**
+   * If provided, the modal renders a room picker rather than using a
+   * fixed roomId. Pass an array of {id, name, floor?} sorted in the
+   * order you want them displayed.
+   */
+  rooms?: { id: string; name: string; floor?: number }[]
   buttonClassName?: string
   buttonStyle?: React.CSSProperties
+  buttonLabel?: string
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [open, setOpen] = useState(false)
   const [description, setDescription] = useState('')
+  const [pickedRoomId, setPickedRoomId] = useState<string>(roomId ?? '')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Determine the effective roomId — fixed prop takes precedence
+  const effectiveRoomId = roomId ?? pickedRoomId
+  const effectiveRoomName =
+    roomName ??
+    (pickedRoomId
+      ? rooms?.find((r) => r.id === pickedRoomId)?.name ?? ''
+      : '')
 
   function close() {
     if (busy) return
@@ -46,6 +64,7 @@ export default function ReportIssueButton({
     setDescription('')
     setPhotoFile(null)
     setError(null)
+    if (!roomId) setPickedRoomId('') // reset picker on close
   }
 
   async function handlePhotoChosen(e: React.ChangeEvent<HTMLInputElement>) {
@@ -66,11 +85,15 @@ export default function ReportIssueButton({
       setError('Please describe the issue')
       return
     }
+    if (!effectiveRoomId) {
+      setError('Please pick a room')
+      return
+    }
     setBusy(true)
     try {
       const fd = new FormData()
       fd.append('description', trimmed)
-      fd.append('room_id', roomId)
+      fd.append('room_id', effectiveRoomId)
       const result = await createIssue(fd)
       if (result.error) {
         setError(result.error)
@@ -133,7 +156,7 @@ export default function ReportIssueButton({
           ...buttonStyle,
         }}
       >
-        ⚠ Report issue
+        {buttonLabel ?? '⚠ Report issue'}
       </button>
     )
   }
@@ -153,12 +176,14 @@ export default function ReportIssueButton({
             >
               Report issue
             </h3>
-            <div
-              className="text-xs fg-mono"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              {roomName}
-            </div>
+            {effectiveRoomName && (
+              <div
+                className="text-xs fg-mono"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {effectiveRoomName}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -173,7 +198,26 @@ export default function ReportIssueButton({
         <div className="fg-modal-body">
           {error && <div className="fg-msg-error mb-3">{error}</div>}
 
-          <label className="fg-label">What's wrong?</label>
+          {!roomId && rooms && rooms.length > 0 && (
+            <div className="mb-3">
+              <label className="fg-label">Which room?</label>
+              <select
+                value={pickedRoomId}
+                onChange={(e) => setPickedRoomId(e.target.value)}
+                className="fg-input"
+                disabled={busy}
+              >
+                <option value="">— pick a room —</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <label className="fg-label">What&apos;s wrong?</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}

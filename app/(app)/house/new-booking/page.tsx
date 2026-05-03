@@ -11,19 +11,44 @@ export default async function NewBookingPage() {
   ])
   if (profile.role !== 'admin') redirect('/house')
 
-  // List of users the admin can book on behalf of. We surface admin +
-  // family roles (cleaners typically aren't booking stays).
-  const { data: profiles } = await supabase
+  // The "book on behalf of" picker shows guests who have a linked
+  // account (since booking_requests requires a profile-id requester).
+  // For unlinked guests (the casual ones), admin can either link them
+  // first or assign them to bed pills after creating a booking.
+  const { data: guestsRaw } = await supabase
+    .from('guests')
+    .select(
+      'id, full_name, linked_profile_id, profiles:profiles!guests_linked_profile_id_fkey(role)',
+    )
+    .not('linked_profile_id', 'is', null)
+    .order('full_name')
+
+  const guestsWithAccounts = ((guestsRaw as any[]) ?? []).map((g) => ({
+    guest_id: g.id,
+    profile_id: g.linked_profile_id as string,
+    full_name: g.full_name,
+    role: (g.profiles as any)?.role ?? 'family',
+  }))
+
+  // Profiles available for linking when admin chooses "+ Add new guest"
+  // — i.e. account holders not yet linked to any guest record.
+  const { data: existingLinks } = await supabase
+    .from('guests')
+    .select('linked_profile_id')
+    .not('linked_profile_id', 'is', null)
+  const linkedSet = new Set(
+    ((existingLinks as any[]) ?? [])
+      .map((g) => g.linked_profile_id)
+      .filter(Boolean),
+  )
+  const { data: allProfiles } = await supabase
     .from('profiles')
     .select('id, full_name, role')
     .in('role', ['admin', 'family'])
     .order('full_name')
-
-  const users = ((profiles as any[]) ?? []).map((p) => ({
-    id: p.id,
-    full_name: p.full_name ?? 'Unnamed',
-    role: p.role,
-  }))
+  const linkableProfiles = ((allProfiles as any[]) ?? []).filter(
+    (p) => !linkedSet.has(p.id),
+  )
 
   return (
     <div className="max-w-xl">
@@ -46,10 +71,14 @@ export default async function NewBookingPage() {
         className="text-sm fg-mono mb-6"
         style={{ color: 'var(--color-muted)' }}
       >
-        Create an approved booking on someone&apos;s behalf — skips the
-        request-and-approve flow.
+        Create an approved booking on someone&apos;s behalf. The list
+        shows guests with linked accounts — for guests without
+        accounts, create the booking and assign them to beds afterward.
       </p>
-      <NewBookingClient users={users} />
+      <NewBookingClient
+        guestsWithAccounts={guestsWithAccounts}
+        linkableProfiles={linkableProfiles}
+      />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AttachmentGallery from '../attachments/AttachmentGallery'
+import ReportIssueButton from './ReportIssueButton'
 import { resolveIssue, reopenIssue } from './actions'
 import type { AttachmentWithUrl } from '@/lib/attachments'
 
@@ -32,6 +33,7 @@ export default function IssuesClient({
   filter,
   openCount,
   resolvedCount,
+  rooms,
   savedMessage,
   errorMessage,
 }: {
@@ -40,6 +42,7 @@ export default function IssuesClient({
   filter: 'open' | 'resolved'
   openCount: number
   resolvedCount: number
+  rooms: { id: string; name: string; floor: number }[]
   savedMessage: string | null
   errorMessage: string | null
 }) {
@@ -83,21 +86,33 @@ export default function IssuesClient({
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <h1
-          className="text-3xl mb-1"
-          style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-ink)' }}
-        >
-          Issues
-        </h1>
-        <p
-          className="text-sm fg-mono"
-          style={{ color: 'var(--color-muted)' }}
-        >
-          {filter === 'open'
-            ? 'Things flagged that need attention'
-            : 'Resolved issue history'}
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+        <div>
+          <h1
+            className="text-3xl mb-1"
+            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-ink)' }}
+          >
+            Issues
+          </h1>
+          <p
+            className="text-sm fg-mono"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {filter === 'open'
+              ? 'Things flagged that need attention'
+              : 'Resolved issue history'}
+          </p>
+        </div>
+        <ReportIssueButton
+          rooms={rooms}
+          buttonLabel="+ Report issue"
+          buttonClassName="fg-btn-gold text-xs"
+          buttonStyle={{
+            color: 'var(--color-ink)',
+            textDecoration: 'none',
+            padding: '8px 14px',
+          }}
+        />
       </div>
 
       {savedMessage && <div className="fg-msg-success mb-4">{savedMessage}</div>}

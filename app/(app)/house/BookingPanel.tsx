@@ -101,6 +101,8 @@ export default function BookingPanel({
   templates: Template[]
   checksForRequest: Check[]
   requesterNotes: {
+    guest_id: string
+    full_name: string
     dietary_notes: string | null
     allergies: string | null
     room_preference: string | null
@@ -640,7 +642,7 @@ export default function BookingPanel({
                 About {primaryRequest.profiles?.full_name ?? 'this guest'}
               </h3>
               <a
-                href={`/admin/profiles/${primaryRequest.requested_by}`}
+                href={`/admin/guests/${requesterNotes.guest_id}`}
                 className="text-xs fg-mono"
                 style={{
                   color: 'var(--color-blue)',
@@ -648,7 +650,7 @@ export default function BookingPanel({
                   textUnderlineOffset: 3,
                 }}
               >
-                Edit profile →
+                Edit guest →
               </a>
             </div>
             <div className="space-y-2">

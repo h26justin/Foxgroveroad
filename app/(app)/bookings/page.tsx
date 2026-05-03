@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { formatDateRange, relativeFromToday, todayISO } from '@/lib/dates'
+import CancelBookingButton from './CancelBookingButton'
 
 export default async function BookingsPage({
   searchParams,
@@ -50,7 +51,11 @@ export default async function BookingsPage({
             Request a stay; we'll let you know once approved.
           </p>
         </div>
-        <Link href="/bookings/new" className="fg-btn-primary">
+        <Link
+          href="/bookings/new"
+          className="fg-btn-primary"
+          style={{ width: 'auto', padding: '8px 18px', fontSize: 14 }}
+        >
           + Request a stay
         </Link>
       </div>
@@ -81,7 +86,11 @@ export default async function BookingsPage({
           <h2 className="fg-section-label mb-3">Upcoming &amp; pending</h2>
           <div className="space-y-3">
             {upcoming.map((r) => (
-              <RequestCard key={r.id} request={r} canCancel={r.status === 'pending'} />
+              <RequestCard
+                key={r.id}
+                request={r}
+                canCancel={r.status === 'pending' || r.status === 'approved'}
+              />
             ))}
           </div>
         </section>
@@ -151,15 +160,10 @@ function RequestCard({
         <div className="flex flex-col items-end gap-2 shrink-0">
           <StatusPill status={request.status} />
           {canCancel && (
-            <form action={`/bookings/${request.id}/cancel`} method="POST">
-              <button
-                type="submit"
-                className="fg-btn-ghost text-xs"
-                title="Cancel this request"
-              >
-                Cancel
-              </button>
-            </form>
+            <CancelBookingButton
+              requestId={request.id}
+              isApproved={request.status === 'approved'}
+            />
           )}
         </div>
       </div>

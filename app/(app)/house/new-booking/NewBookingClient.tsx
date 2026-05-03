@@ -3,8 +3,15 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBookingForUser } from '../actions'
+import { createGuest } from '../../admin/guests/actions'
 
-type UserRow = { id: string; full_name: string; role: string }
+type GuestWithAccount = {
+  guest_id: string
+  profile_id: string
+  full_name: string
+  role: string
+}
+type LinkableProfile = { id: string; full_name: string; role: string }
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -15,11 +22,25 @@ function tomorrowISO(): string {
   return d.toISOString().slice(0, 10)
 }
 
-export default function NewBookingClient({ users }: { users: UserRow[] }) {
+export default function NewBookingClient({
+  guestsWithAccounts,
+  linkableProfiles,
+}: {
+  guestsWithAccounts: GuestWithAccount[]
+  linkableProfiles: LinkableProfile[]
+}) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
-  const [userId, setUserId] = useState('')
+  // The picker can be in two modes:
+  //   - 'pick' — choose an existing guest with account
+  //   - 'new'  — create a new guest, optionally linking to an account
+  const [mode, setMode] = useState<'pick' | 'new'>('pick')
+
+  const [profileId, setProfileId] = useState('')
+  const [newGuestName, setNewGuestName] = useState('')
+  const [newGuestLinkProfileId, setNewGuestLinkProfileId] = useState('')
+
   const [checkIn, setCheckIn] = useState(todayISO())
   const [checkOut, setCheckOut] = useState(tomorrowISO())
   const [adults, setAdults] = useState('2')
@@ -30,13 +51,48 @@ export default function NewBookingClient({ users }: { users: UserRow[] }) {
 
   async function handleSubmit() {
     setError(null)
-    if (!userId) {
-      setError('Pick a user')
+
+    let resolvedProfileId = profileId
+
+    if (mode === 'new') {
+      if (!newGuestName.trim()) {
+        setError(
+          'Type a name for the new guest, or pick an existing one above.',
+        )
+        return
+      }
+      if (!newGuestLinkProfileId) {
+        // The guest needs a linked account to be the booking requester.
+        // Without one, we can't create a booking_request for them
+        // because requested_by must be a profile id.
+        setError(
+          "To make this guest the booking's requester, link them to an account holder below. Otherwise, create the booking under your own name and assign this guest to a bed afterward.",
+        )
+        return
+      }
+
+      // Create the guest first, then use that linked profile as requested_by.
+      setBusy(true)
+      const gfd = new FormData()
+      gfd.append('full_name', newGuestName.trim())
+      gfd.append('linked_profile_id', newGuestLinkProfileId)
+      const guestResult = await createGuest(gfd)
+      if (guestResult.error) {
+        setBusy(false)
+        setError('Failed to add guest: ' + guestResult.error)
+        return
+      }
+      resolvedProfileId = newGuestLinkProfileId
+    }
+
+    if (!resolvedProfileId) {
+      setError('Pick a guest')
       return
     }
+
     setBusy(true)
     const fd = new FormData()
-    fd.append('requested_by', userId)
+    fd.append('requested_by', resolvedProfileId)
     fd.append('check_in', checkIn)
     fd.append('check_out', checkOut)
     fd.append('adults', adults)
@@ -48,11 +104,14 @@ export default function NewBookingClient({ users }: { users: UserRow[] }) {
       setError(result.error)
       return
     }
-    // Land on /house with the panel open for bed assignment
     startTransition(() => {
-      router.push(`/house?request=${result.request_id}&saved=Booking%20created`)
+      router.push(
+        `/house?request=${result.request_id}&saved=Booking%20created`,
+      )
     })
   }
+
+  const noGuestsYet = guestsWithAccounts.length === 0
 
   return (
     <div className="fg-card p-5">
@@ -61,25 +120,83 @@ export default function NewBookingClient({ users }: { users: UserRow[] }) {
       <div className="space-y-4">
         <div>
           <label className="fg-label">Book on behalf of</label>
-          <select
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            className="fg-input"
-          >
-            <option value="">-- pick a user --</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.full_name} ({u.role})
-              </option>
-            ))}
-          </select>
-          {users.length === 0 && (
-            <p
-              className="text-xs fg-mono mt-1"
-              style={{ color: 'var(--color-amber)' }}
+          <div className="flex gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => setMode('pick')}
+              className={mode === 'pick' ? 'fg-btn-gold' : 'fg-btn-ghost'}
+              style={{ width: 'auto', padding: '6px 12px', fontSize: 12 }}
+              disabled={noGuestsYet}
             >
-              No users yet. Invite someone from the Team page first.
-            </p>
+              Pick existing
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('new')}
+              className={mode === 'new' ? 'fg-btn-gold' : 'fg-btn-ghost'}
+              style={{ width: 'auto', padding: '6px 12px', fontSize: 12 }}
+            >
+              + Add new guest
+            </button>
+          </div>
+
+          {mode === 'pick' && (
+            <>
+              {noGuestsYet ? (
+                <div className="fg-msg-error" style={{ fontSize: 13 }}>
+                  No guests with accounts yet. Use &ldquo;+ Add new
+                  guest&rdquo; above, or invite someone from the Team
+                  page first.
+                </div>
+              ) : (
+                <select
+                  value={profileId}
+                  onChange={(e) => setProfileId(e.target.value)}
+                  className="fg-input"
+                >
+                  <option value="">— pick a guest —</option>
+                  {guestsWithAccounts.map((g) => (
+                    <option key={g.profile_id} value={g.profile_id}>
+                      {g.full_name} ({g.role})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+
+          {mode === 'new' && (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={newGuestName}
+                onChange={(e) => setNewGuestName(e.target.value)}
+                placeholder="Guest's full name"
+                maxLength={200}
+                className="fg-input"
+              />
+              <select
+                value={newGuestLinkProfileId}
+                onChange={(e) => setNewGuestLinkProfileId(e.target.value)}
+                className="fg-input"
+              >
+                <option value="">— link to which account? —</option>
+                {linkableProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name} ({p.role})
+                  </option>
+                ))}
+              </select>
+              <p
+                className="text-xs fg-mono"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Adding a guest here also creates a guest record in
+                Guests. To create a booking for someone without any
+                account, use your own name as the requester and assign
+                the guest to a bed in the panel afterward.
+              </p>
+            </div>
           )}
         </div>
 
@@ -145,14 +262,14 @@ export default function NewBookingClient({ users }: { users: UserRow[] }) {
           className="text-xs fg-mono"
           style={{ color: 'var(--color-muted)' }}
         >
-          The booking is created as approved. After saving, you&apos;ll
-          land on the House page with the panel open so you can assign beds.
+          The booking is created as approved. You&apos;ll land on the
+          House page with the panel open so you can assign beds.
         </p>
 
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={busy || !userId}
+          disabled={busy}
           className="fg-btn-gold"
           style={{ width: 'auto', padding: '10px 22px' }}
         >
