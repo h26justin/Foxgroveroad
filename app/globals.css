@@ -1063,7 +1063,8 @@ button, a, label, input[type="checkbox"] {
   padding: 0 8px;
   display: flex;
   align-items: center;
-  overflow: hidden;
+  /* No overflow:hidden here — the .truncate child clips text, and we
+     need the popover (positioned above) to be visible outside this box. */
   white-space: nowrap;
   cursor: grab;
   user-select: none;
@@ -1072,6 +1073,14 @@ button, a, label, input[type="checkbox"] {
   touch-action: none;
   transition: opacity 0.15s, transform 0.1s, box-shadow 0.1s;
   z-index: 1;
+}
+/* The text span clips when the bar is too narrow */
+.fg-booking-bar > .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 .fg-booking-bar:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
