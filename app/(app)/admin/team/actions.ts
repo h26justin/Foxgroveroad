@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminPublicClient } from '@/lib/supabase/admin-public'
 import { requireAdmin } from '@/lib/auth'
 
 // =====================================================================
@@ -107,10 +108,9 @@ export async function toggleCleanerActive(formData: FormData) {
 // =====================================================================
 
 /**
- * Send a password reset email. The link in the email goes via
- * /auth/callback which exchanges the recovery code, then redirects
- * the (now-authenticated) user to /auth/update-password where they
- * type a new password.
+ * Send a password reset email. The link in the email goes directly to
+ * /auth/update-password with auth tokens in the URL fragment (implicit
+ * flow); the page's browser client picks up the session automatically.
  *
  * Used for both "reset another user's password" and "reset my own
  * password" — same flow, different target email.
@@ -129,10 +129,18 @@ export async function sendPasswordReset(formData: FormData) {
     )
   }
 
-  // Use the admin client so we can send even when the request user is
-  // not the target user.
-  const admin = createAdminClient()
-  const redirectTo = `${siteUrl()}/auth/callback?next=${encodeURIComponent('/auth/update-password')}`
+  // Use the implicit-flow admin client. PKCE doesn't work for admin-
+  // triggered resets (verifier ends up on the wrong machine). Implicit
+  // flow puts auth tokens directly in the URL fragment, which the
+  // recipient's browser client picks up automatically.
+  //
+  // redirectTo points straight at /auth/update-password — no query
+  // string, no callback round-trip. Query strings on redirect URLs
+  // can trip Supabase's allow-list matcher even when wildcards are
+  // configured, causing the redirect to silently fall back to the
+  // bare Site URL.
+  const admin = createAdminPublicClient()
+  const redirectTo = `${siteUrl()}/auth/update-password`
   const { error } = await admin.auth.resetPasswordForEmail(email, {
     redirectTo,
   })
@@ -168,8 +176,14 @@ export async function sendMagicLink(formData: FormData) {
     )
   }
 
-  const admin = createAdminClient()
-  const emailRedirectTo = `${siteUrl()}/auth/callback?next=${encodeURIComponent('/housekeeping')}`
+  // Same reasoning as sendPasswordReset above: implicit-flow client,
+  // no callback indirection. emailRedirectTo points at /auth/finish-login,
+  // a tiny bridge page that consumes the URL fragment and forwards
+  // the user to /housekeeping. Going directly to /housekeeping doesn't
+  // work because middleware would bounce the (still-anonymous) browser
+  // to /login before the client-side hash detection can run.
+  const admin = createAdminPublicClient()
+  const emailRedirectTo = `${siteUrl()}/auth/finish-login`
   const { error } = await admin.auth.signInWithOtp({
     email,
     options: { shouldCreateUser: false, emailRedirectTo },
