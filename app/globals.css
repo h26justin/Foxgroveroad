@@ -1716,3 +1716,100 @@ button, a, label, input[type="checkbox"] {
   border-radius: 999px;
   margin-left: 8px;
 }
+
+/* =====================================================================
+   v16 — Pre-arrival on housekeeping page
+   ===================================================================== */
+
+.fg-room-prearrival-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(168, 134, 46, 0.18);
+  color: var(--color-gold);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+}
+
+.fg-prearrival-section {
+  background: rgba(168, 134, 46, 0.06);
+  border-bottom: 1px solid rgba(168, 134, 46, 0.2);
+  padding: 12px 14px;
+}
+.fg-prearrival-header {
+  margin-bottom: 8px;
+}
+.fg-prearrival-title {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  color: var(--color-ink);
+}
+.fg-prearrival-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 2px;
+}
+.fg-prearrival-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fg-prearrival-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+.fg-prearrival-row:hover {
+  background: rgba(168, 134, 46, 0.08);
+}
+.fg-prearrival-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+}
+.fg-prearrival-row .is-done {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+/* =====================================================================
+   v17 — Accessibility: larger-text mode
+   =====================================================================
+   Opt-in scaling. Targets readability for cleaners + older users.
+   Doesn't override fixed-size monospace metadata (timestamps, codes etc.)
+   because those are designed to be terse — bumping them doesn't help. */
+
+.fg-acc-large {
+  font-size: 18px;
+  line-height: 1.55;
+}
+.fg-acc-large .fg-room-name { font-size: 20px; }
+.fg-acc-large .fg-taprow-name { font-size: 17px; }
+.fg-acc-large .fg-prearrival-row { font-size: 16px; }
+.fg-acc-large .fg-prearrival-title { font-size: 16px; }
+.fg-acc-large .fg-input { font-size: 17px; }
+.fg-acc-large .fg-label { font-size: 13px; }
+.fg-acc-large h1 { font-size: 2.1em; }
+.fg-acc-large h2 { font-size: 1.5em; }
+.fg-acc-large .fg-btn-primary,
+.fg-acc-large .fg-btn-gold,
+.fg-acc-large .fg-btn-ghost {
+  font-size: 15px;
+}
+/* Bigger touch targets for tickable rows */
+.fg-acc-large .fg-prearrival-row input[type='checkbox'],
+.fg-acc-large .fg-panel-check input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}

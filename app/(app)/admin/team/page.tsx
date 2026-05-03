@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { setUserRole, toggleCleanerActive, linkCleanerProfile } from './actions'
+import InvitePersonForm from './InvitePersonForm'
 
 export default async function AdminTeamPage({
   searchParams,
@@ -50,6 +51,8 @@ export default async function AdminTeamPage({
 
       {saved && <div className="fg-msg-success mb-6">Saved.</div>}
       {error && <div className="fg-msg-error mb-6">{error}</div>}
+
+      <InvitePersonForm />
 
       {/* People */}
       <section className="mb-12">

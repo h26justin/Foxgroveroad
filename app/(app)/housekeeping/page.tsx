@@ -20,10 +20,24 @@ export default async function HousekeepingPage({
   ])
 
   const today = new Date().toISOString().split('T')[0]
+  // 5-day window for pre-arrival prep
+  const fiveDaysOut = (() => {
+    const d = new Date(today + 'T00:00:00')
+    d.setDate(d.getDate() + 5)
+    return d.toISOString().split('T')[0]
+  })()
 
-  // Five queries fire in parallel — adding open-issue counts per room
-  // for the v13 issue-pill on each room header.
-  const [dueRowsRes, completionsRes, roomsRes, roomOrderRes, openIssuesRes] = await Promise.all([
+  // Six queries fire in parallel — adds upcoming bookings + pre-arrival
+  // templates + existing checks for the v16 prearrival-on-housekeeping feature.
+  const [
+    dueRowsRes,
+    completionsRes,
+    roomsRes,
+    roomOrderRes,
+    openIssuesRes,
+    upcomingBookingsRes,
+    prearrivalTemplatesRes,
+  ] = await Promise.all([
     supabase
       .from('cleaner_tasks_today')
       .select(
@@ -53,6 +67,23 @@ export default async function HousekeepingPage({
       .from('issues')
       .select('id, room_id')
       .eq('status', 'open'),
+    // Bookings whose check-in is between today and five days out — these
+    // are the active "prep this room" prompts. Joined to beds for room_id
+    // and to booking_requests for the dates and the request id we'll FK
+    // pre-arrival checks against.
+    supabase
+      .from('bookings')
+      .select(
+        'id, bed_id, check_in, check_out, request_id, guest_name, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
+      )
+      .eq('status', 'approved')
+      .gte('check_in', today)
+      .lte('check_in', fiveDaysOut)
+      .order('check_in'),
+    supabase
+      .from('prearrival_templates')
+      .select('id, room_id, name, position')
+      .order('position'),
   ])
 
   // Build a per-room open-issues count from the open issues list.
@@ -64,6 +95,88 @@ export default async function HousekeepingPage({
   const openIssuesCount: Record<string, number> = {}
   for (const [k, v] of openIssuesByRoom) openIssuesCount[k] = v
 
+  // Fetch existing pre-arrival checks for the request IDs we found.
+  const upcomingBookings = (upcomingBookingsRes.data as any[]) ?? []
+  const upcomingRequestIds = Array.from(
+    new Set(upcomingBookings.map((b) => b.request_id).filter(Boolean))
+  )
+  let checks: any[] = []
+  if (upcomingRequestIds.length > 0) {
+    const { data: checksData } = await supabase
+      .from('prearrival_checks')
+      .select('id, booking_request_id, template_id, room_id')
+      .in('booking_request_id', upcomingRequestIds)
+    checks = (checksData as any[]) ?? []
+  }
+
+  // Build "soonest upcoming booking per room" — there can be multiple
+  // bookings for the same room across the window; we surface the
+  // earliest one only.
+  const soonestPerRoom = new Map<
+    string,
+    {
+      request_id: string
+      room_id: string
+      check_in: string
+      check_out: string
+      guest_name: string | null
+      requester_name: string | null
+    }
+  >()
+  for (const b of upcomingBookings) {
+    const roomId = (b.beds as any)?.room_id
+    const requestId = b.request_id
+    if (!roomId || !requestId) continue
+    const existing = soonestPerRoom.get(roomId)
+    if (!existing || b.check_in < existing.check_in) {
+      soonestPerRoom.set(roomId, {
+        request_id: requestId,
+        room_id: roomId,
+        check_in: b.check_in,
+        check_out: b.check_out,
+        guest_name: b.guest_name,
+        requester_name: (b.profiles as any)?.full_name ?? null,
+      })
+    }
+  }
+
+  // Build per-room pre-arrival data: { templates[], checkedTemplateIds[], booking-info }
+  const prearrivalByRoom: Record<
+    string,
+    {
+      request_id: string
+      check_in: string
+      check_out: string
+      guest_label: string
+      templates: { id: string; name: string; position: number }[]
+      checkedTemplateIds: string[]
+    }
+  > = {}
+
+  const allTemplates = (prearrivalTemplatesRes.data as any[]) ?? []
+  for (const [roomId, info] of soonestPerRoom) {
+    const templates = allTemplates
+      .filter((t) => t.room_id === roomId)
+      .map((t) => ({ id: t.id, name: t.name, position: t.position }))
+    if (templates.length === 0) continue // no checklist for this room
+    const checkedTemplateIds = checks
+      .filter(
+        (c) =>
+          c.booking_request_id === info.request_id && c.room_id === roomId
+      )
+      .map((c) => c.template_id)
+    const guestLabel =
+      info.guest_name ?? info.requester_name ?? 'a guest'
+    prearrivalByRoom[roomId] = {
+      request_id: info.request_id,
+      check_in: info.check_in,
+      check_out: info.check_out,
+      guest_label: guestLabel,
+      templates,
+      checkedTemplateIds,
+    }
+  }
+
   return (
     <HousekeepingClient
       dueTasks={(dueRowsRes.data as any[]) ?? []}
@@ -71,6 +184,7 @@ export default async function HousekeepingPage({
       rooms={(roomsRes.data as any[]) ?? []}
       roomOrder={(roomOrderRes.data as any[]) ?? []}
       openIssuesCount={openIssuesCount}
+      prearrivalByRoom={prearrivalByRoom}
       profile={profile}
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}

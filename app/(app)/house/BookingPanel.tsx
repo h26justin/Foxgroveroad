@@ -9,6 +9,8 @@ import {
   approveRequest,
   declineRequest,
   cancelApprovedBooking,
+  editRequestDates,
+  deleteBookingPermanently,
   movePillToBed,
   addGuestToFirstAvailableBed,
   renameGuest,
@@ -105,6 +107,11 @@ export default function BookingPanel({
   const [declineMode, setDeclineMode] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
 
+  // v15: edit-dates inline form
+  const [editDatesMode, setEditDatesMode] = useState(false)
+  const [newCheckIn, setNewCheckIn] = useState('')
+  const [newCheckOut, setNewCheckOut] = useState('')
+
   // Auto-clear error
   useEffect(() => {
     if (!localError) return
@@ -126,6 +133,9 @@ export default function BookingPanel({
   const primaryRequest = request
   const isPending = primaryRequest?.status === 'pending'
   const isApproved = primaryRequest?.status === 'approved'
+  const isCancelled = primaryRequest?.status === 'cancelled'
+  const isDeclined = primaryRequest?.status === 'declined'
+  const isTerminal = isCancelled || isDeclined
   const isAdmin = profile.role === 'admin'
 
   // Bed-state map for the bed grid (only meaningful when we have a request)
@@ -302,6 +312,59 @@ export default function BookingPanel({
     })
   }
 
+  function handleStartEditDates() {
+    if (!primaryRequest) return
+    setNewCheckIn(primaryRequest.check_in)
+    setNewCheckOut(primaryRequest.check_out)
+    setEditDatesMode(true)
+    setLocalError(null)
+  }
+
+  async function handleSaveDates() {
+    if (!primaryRequest) return
+    setLocalError(null)
+    if (!newCheckIn || !newCheckOut) {
+      setLocalError('Pick both dates')
+      return
+    }
+    if (newCheckIn >= newCheckOut) {
+      setLocalError('Check-out must be after check-in')
+      return
+    }
+    startTransition(async () => {
+      const r = await editRequestDates(
+        primaryRequest.id,
+        newCheckIn,
+        newCheckOut
+      )
+      if (r?.error) {
+        setLocalError(r.error)
+        return
+      }
+      setEditDatesMode(false)
+      router.refresh()
+    })
+  }
+
+  function handleDeletePermanently() {
+    if (!primaryRequest) return
+    if (
+      !window.confirm(
+        'Permanently delete this booking? This cannot be undone — all history will be lost.'
+      )
+    )
+      return
+    startTransition(async () => {
+      const r = await deleteBookingPermanently(primaryRequest.id)
+      if (r?.error) {
+        setLocalError(r.error)
+        return
+      }
+      router.refresh()
+      onClose()
+    })
+  }
+
   // ── Render ───────────────────────────────────────────────────────────
   if (!primaryRequest && !booking) {
     return (
@@ -461,8 +524,16 @@ export default function BookingPanel({
                 </div>
               </form>
             )}
-            {isApproved && (
+            {isApproved && !editDatesMode && (
               <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleStartEditDates}
+                  className="fg-btn-ghost text-xs"
+                  style={{ width: 'auto', padding: '8px 14px' }}
+                >
+                  Edit dates
+                </button>
                 <button
                   type="button"
                   onClick={handleCancelBooking}
@@ -475,6 +546,79 @@ export default function BookingPanel({
                 >
                   Cancel booking
                 </button>
+              </div>
+            )}
+            {isApproved && editDatesMode && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="fg-label">Check-in</label>
+                    <input
+                      type="date"
+                      value={newCheckIn}
+                      onChange={(e) => setNewCheckIn(e.target.value)}
+                      className="fg-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="fg-label">Check-out</label>
+                    <input
+                      type="date"
+                      value={newCheckOut}
+                      onChange={(e) => setNewCheckOut(e.target.value)}
+                      className="fg-input"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs fg-mono" style={{ color: 'var(--color-muted)' }}>
+                  Bed assignments stay the same — only the dates change.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveDates}
+                    className="fg-btn-primary"
+                    style={{ width: 'auto', padding: '8px 16px' }}
+                  >
+                    Save new dates
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditDatesMode(false)
+                      setLocalError(null)
+                    }}
+                    className="fg-btn-ghost"
+                    style={{ width: 'auto', padding: '8px 14px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {isTerminal && (
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleDeletePermanently}
+                  className="fg-btn-ghost text-xs"
+                  style={{
+                    width: 'auto',
+                    padding: '8px 14px',
+                    color: 'var(--color-red)',
+                  }}
+                >
+                  Delete entirely
+                </button>
+                <span
+                  className="text-xs fg-mono"
+                  style={{
+                    color: 'var(--color-muted)',
+                    alignSelf: 'center',
+                  }}
+                >
+                  Removes the booking and its history. Cannot be undone.
+                </span>
               </div>
             )}
           </div>

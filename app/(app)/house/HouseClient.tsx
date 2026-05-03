@@ -233,7 +233,7 @@ export default function HouseClient({
             </Link>
           )}
           {isAdmin && (
-            <Link href="/bookings/new" className="fg-btn-ghost text-xs"
+            <Link href="/house/new-booking" className="fg-btn-gold text-xs"
               style={{ width: 'auto', padding: '8px 14px' }}>
               + New booking
             </Link>

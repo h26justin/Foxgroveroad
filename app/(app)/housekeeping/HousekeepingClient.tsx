@@ -10,6 +10,7 @@ import {
   undoTaskComplete,
   saveRoomOrder,
 } from './actions'
+import { togglePrearrivalCheck } from '../house/actions'
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ export default function HousekeepingClient({
   rooms,
   roomOrder,
   openIssuesCount,
+  prearrivalByRoom,
   profile,
   activeRoomId,
   errorMessage,
@@ -109,6 +111,17 @@ export default function HousekeepingClient({
   rooms: Room[]
   roomOrder: RoomOrderRow[]
   openIssuesCount: Record<string, number>
+  prearrivalByRoom: Record<
+    string,
+    {
+      request_id: string
+      check_in: string
+      check_out: string
+      guest_label: string
+      templates: { id: string; name: string; position: number }[]
+      checkedTemplateIds: string[]
+    }
+  >
   profile: Profile
   activeRoomId: string | null
   errorMessage: string | null
@@ -732,6 +745,7 @@ export default function HousekeepingClient({
                     dueTasks={dueByRoom.get(room.id) ?? []}
                     completions={completionsByRoom.get(room.id) ?? []}
                     openIssueCount={openIssuesCount[room.id] ?? 0}
+                    prearrival={prearrivalByRoom[room.id] ?? null}
                     isExpanded={expandedRooms.has(room.id)}
                     onToggle={() => toggleRoom(room.id)}
                     canTick={canTick}
@@ -782,6 +796,7 @@ function RoomAccordion({
   dueTasks,
   completions,
   openIssueCount,
+  prearrival,
   isExpanded,
   onToggle,
   canTick,
@@ -799,6 +814,14 @@ function RoomAccordion({
   dueTasks: DueTask[]
   completions: Completion[]
   openIssueCount: number
+  prearrival: {
+    request_id: string
+    check_in: string
+    check_out: string
+    guest_label: string
+    templates: { id: string; name: string; position: number }[]
+    checkedTemplateIds: string[]
+  } | null
   isExpanded: boolean
   onToggle: () => void
   canTick: boolean
@@ -814,6 +837,9 @@ function RoomAccordion({
   const dueCount = dueTasks.length
   const doneCount = completions.length
   const meta = TYPE_META[room.room_type] ?? { icon: '🏠' }
+  const prearrivalUnchecked = prearrival
+    ? prearrival.templates.length - prearrival.checkedTemplateIds.length
+    : 0
 
   return (
     <div
@@ -857,6 +883,11 @@ function RoomAccordion({
           <span style={{ fontSize: 20, marginRight: 4 }}>{meta.icon}</span>
           <span className="fg-room-name">{room.name}</span>
           <span className="fg-room-counts">
+            {prearrival && prearrivalUnchecked > 0 && (
+              <span className="fg-room-prearrival-pill">
+                🛎 {prearrivalUnchecked} prep
+              </span>
+            )}
             {openIssueCount > 0 && (
               <span className="fg-room-issue-pill">
                 ⚠ {openIssueCount}
@@ -878,6 +909,14 @@ function RoomAccordion({
 
       {isExpanded && (
         <div className="fg-room-body">
+          {prearrival && (
+            <PrearrivalSection
+              roomId={room.id}
+              prearrival={prearrival}
+              canTick={canTick}
+            />
+          )}
+
           {dueTasks.length > 0 && (
             <div className="space-y-2 px-3 py-3">
               {dueTasks.map((task) => (
@@ -960,6 +999,129 @@ function CompletedSection({ completions }: { completions: Completion[] }) {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ───── Prearrival prep section, sits inside a room body ─────────────
+function PrearrivalSection({
+  roomId,
+  prearrival,
+  canTick,
+}: {
+  roomId: string
+  prearrival: {
+    request_id: string
+    check_in: string
+    check_out: string
+    guest_label: string
+    templates: { id: string; name: string; position: number }[]
+    checkedTemplateIds: string[]
+  }
+  canTick: boolean
+}) {
+  const [, startTransition] = useTransition()
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  // Optimistic local set of checked ids — server is source of truth on
+  // refresh, but we update immediately so the cleaner gets feedback.
+  const [optimisticChecked, setOptimisticChecked] = useState<Set<string>>(
+    () => new Set(prearrival.checkedTemplateIds),
+  )
+  // Re-sync if server-provided ids change (e.g. on revalidate)
+  useEffect(() => {
+    setOptimisticChecked(new Set(prearrival.checkedTemplateIds))
+  }, [prearrival.checkedTemplateIds])
+
+  const checkInDate = new Date(prearrival.check_in + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const daysUntil = Math.round(
+    (checkInDate.getTime() - today.getTime()) / 86400000,
+  )
+  const arrivalLabel =
+    daysUntil === 0
+      ? 'today'
+      : daysUntil === 1
+        ? 'tomorrow'
+        : `in ${daysUntil} days`
+  const dateLabel = checkInDate.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+
+  const completedCount = optimisticChecked.size
+  const totalCount = prearrival.templates.length
+
+  async function handleToggle(templateId: string) {
+    if (!canTick) return
+    setError(null)
+    const wasChecked = optimisticChecked.has(templateId)
+    const next = new Set(optimisticChecked)
+    if (wasChecked) next.delete(templateId)
+    else next.add(templateId)
+    setOptimisticChecked(next)
+    setBusyId(templateId)
+
+    const result = await togglePrearrivalCheck(
+      prearrival.request_id,
+      templateId,
+      roomId,
+      !wasChecked,
+    )
+    setBusyId(null)
+    if (result?.error) {
+      // Roll back optimistic state on failure
+      const rolled = new Set(optimisticChecked)
+      if (wasChecked) rolled.add(templateId)
+      else rolled.delete(templateId)
+      setOptimisticChecked(rolled)
+      setError(result.error)
+      return
+    }
+    startTransition(() => {
+      // Server data will refresh with revalidatePath; nothing to do here.
+    })
+  }
+
+  return (
+    <div className="fg-prearrival-section">
+      <div className="fg-prearrival-header">
+        <div>
+          <div className="fg-prearrival-title">
+            🛎 Prep for {prearrival.guest_label}
+          </div>
+          <div className="fg-prearrival-meta">
+            arriving {arrivalLabel} · {dateLabel} · {completedCount} of{' '}
+            {totalCount} done
+          </div>
+        </div>
+      </div>
+      {error && (
+        <div className="fg-msg-error" style={{ margin: '8px 0' }}>
+          {error}
+        </div>
+      )}
+      <div className="fg-prearrival-list">
+        {prearrival.templates
+          .slice()
+          .sort((a, b) => a.position - b.position)
+          .map((t) => {
+            const isChecked = optimisticChecked.has(t.id)
+            return (
+              <label key={t.id} className="fg-prearrival-row">
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => handleToggle(t.id)}
+                  disabled={!canTick || busyId === t.id}
+                />
+                <span className={isChecked ? 'is-done' : ''}>{t.name}</span>
+              </label>
+            )
+          })}
+      </div>
     </div>
   )
 }

@@ -219,5 +219,7 @@ export async function togglePrearrivalCheck(
   }
 
   revalidatePath('/bedrooms')
+  revalidatePath('/house')
+  revalidatePath('/housekeeping')
   return { ok: true }
 }

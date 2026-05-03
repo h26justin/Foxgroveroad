@@ -44,9 +44,14 @@ export default async function AuthedLayout({
     }
   }
 
+  // Larger-text mode: applied as a class on the shell so any styles
+  // that opt in via .fg-acc-large can scale.
+  const accClass =
+    (profile as any).accessibility_mode === 'large' ? ' fg-acc-large' : ''
+
   return (
     <div
-      className="fg-app-shell"
+      className={'fg-app-shell' + accClass}
       style={{ background: 'var(--color-cream)' }}
     >
       <TopNav
