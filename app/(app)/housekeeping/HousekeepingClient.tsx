@@ -6,6 +6,7 @@ import TaskRow from './TaskRow'
 import ReportIssueButton from '../issues/ReportIssueButton'
 import OneshotList, { type OneshotTask } from '../oneshots/OneshotList'
 import PostOneshotButton from '../oneshots/PostOneshotButton'
+import PlantsSection from '../plants/PlantsSection'
 import { floorLabel } from '@/lib/floors'
 import {
   markTaskComplete,
@@ -110,6 +111,7 @@ export default function HousekeepingClient({
   activeRoomId,
   errorMessage,
   roomStatuses,
+  plants,
 }: {
   dueTasks: DueTask[]
   completions: Completion[]
@@ -133,6 +135,7 @@ export default function HousekeepingClient({
   activeRoomId: string | null
   errorMessage: string | null
   roomStatuses: Record<string, { status: 'green' | 'orange' | 'red'; reason: string }>
+  plants: import('@/lib/plants').PlantWithStatus[]
 }) {
   const canTick = profile.role === 'admin' || profile.role === 'cleaner'
   const isAdmin = profile.role === 'admin'
@@ -195,18 +198,24 @@ export default function HousekeepingClient({
   // When a chip is active → just that room. Otherwise → rooms with due
   // tasks or completions today (skip empty ones in 'most_due' mode).
   // 'custom' mode shows ALL rooms so the user can drag any of them.
+  // v34: keep the global house room visible if any plants exist, so the
+  // cleaner can find the plants checklist even on a quiet day.
+  const hasPlantsToShow = plants.length > 0
   const visibleRooms: Room[] = useMemo(() => {
     let candidates = rooms
     if (activeRoomId) {
       candidates = rooms.filter((r) => r.id === activeRoomId)
     } else if (sortMode === 'most_due') {
       candidates = rooms.filter(
-        (r) => dueByRoom.has(r.id) || completionsByRoom.has(r.id)
+        (r) =>
+          dueByRoom.has(r.id) ||
+          completionsByRoom.has(r.id) ||
+          (hasPlantsToShow && r.room_type === 'global'),
       )
     }
     // In custom mode we keep ALL rooms.
     return candidates
-  }, [rooms, dueByRoom, completionsByRoom, activeRoomId, sortMode])
+  }, [rooms, dueByRoom, completionsByRoom, activeRoomId, sortMode, hasPlantsToShow])
 
   // ─── Most-to-do sort: SNAPSHOT not live ─────────────────────────────
   // Sorting "by most due" needs to be stable while you tick tasks off,
@@ -805,6 +814,7 @@ export default function HousekeepingClient({
                     openIssueCount={openIssuesCount[room.id] ?? 0}
                     prearrival={prearrivalByRoom[room.id] ?? null}
                     statusInfo={roomStatuses[room.id]}
+                    plants={room.room_type === 'global' ? plants : []}
                     isExpanded={expandedRooms.has(room.id)}
                     onToggle={() => toggleRoom(room.id)}
                     canTick={canTick}
@@ -861,6 +871,7 @@ function RoomAccordion({
   openIssueCount,
   prearrival,
   statusInfo,
+  plants,
   isExpanded,
   onToggle,
   canTick,
@@ -891,6 +902,7 @@ function RoomAccordion({
     checkedTemplateIds: string[]
   } | null
   statusInfo: { status: 'green' | 'orange' | 'red'; reason: string } | undefined
+  plants: import('@/lib/plants').PlantWithStatus[]
   isExpanded: boolean
   onToggle: () => void
   canTick: boolean
@@ -1044,14 +1056,28 @@ function RoomAccordion({
             />
           )}
 
-          {dueTasks.length === 0 && completions.length === 0 && (
-            <p
-              className="text-xs fg-mono text-center py-6"
-              style={{ color: 'var(--color-muted)' }}
-            >
-              No tasks needed in this room today.
-            </p>
+          {/* v34: plants checklist — only the global house room gets this */}
+          {plants.length > 0 && (
+            <div className="px-3 pb-2">
+              <PlantsSection
+                initialPlants={plants}
+                canWater={canTick}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+              />
+            </div>
           )}
+
+          {dueTasks.length === 0 &&
+            completions.length === 0 &&
+            plants.length === 0 && (
+              <p
+                className="text-xs fg-mono text-center py-6"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                No tasks needed in this room today.
+              </p>
+            )}
 
           {/* Report-issue link — discreet, lives at the bottom of the body */}
           <div

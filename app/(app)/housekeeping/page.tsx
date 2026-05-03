@@ -2,6 +2,7 @@ import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
 import { getAllRoomStatuses } from '@/lib/room-status'
+import { annotatePlants, type Plant, type PlantWatering } from '@/lib/plants'
 import HousekeepingClient from './HousekeepingClient'
 
 // 30s soft cache. Actions that mutate data call revalidatePath('/housekeeping')
@@ -45,6 +46,8 @@ export default async function HousekeepingPage({
     upcomingBookingsRes,
     prearrivalTemplatesRes,
     allCompletionsRes,
+    plantsRes,
+    plantWateringsRes,
   ] = await Promise.all([
     supabase
       .from('cleaner_tasks_today')
@@ -102,6 +105,24 @@ export default async function HousekeepingPage({
         .select('task_template_id, completed_at_date')
         .gte('completed_at_date', yearAgo)
         .order('completed_at_date', { ascending: false })
+    })(),
+    // v34: plants + recent waterings (last 60d gives enough headroom
+    // even for monthly-watered plants)
+    supabase
+      .from('plants')
+      .select('id, name, location, frequency_days, notes, position')
+      .order('position'),
+    (() => {
+      const sixtyDaysAgo = (() => {
+        const d = new Date(today + 'T00:00:00')
+        d.setDate(d.getDate() - 60)
+        return d.toISOString().split('T')[0]
+      })()
+      return supabase
+        .from('plant_waterings')
+        .select('id, plant_id, watered_by, watered_at, watered_at_date')
+        .gte('watered_at_date', sixtyDaysAgo)
+        .order('watered_at', { ascending: false })
     })(),
   ])
 
@@ -289,6 +310,13 @@ export default async function HousekeepingPage({
     }
   }
 
+  // v34: derive plant statuses
+  const annotatedPlants = annotatePlants(
+    ((plantsRes.data as any[]) ?? []) as Plant[],
+    ((plantWateringsRes.data as any[]) ?? []) as PlantWatering[],
+    today,
+  )
+
   return (
     <HousekeepingClient
       dueTasks={dueRows}
@@ -302,6 +330,7 @@ export default async function HousekeepingPage({
       profile={profile}
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}
+      plants={annotatedPlants}
       roomStatuses={Object.fromEntries(await getAllRoomStatuses(supabase, today))}
     />
   )

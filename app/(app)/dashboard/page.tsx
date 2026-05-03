@@ -546,6 +546,9 @@ export default async function DashboardPage() {
               <Link href="/admin/overview" className="fg-btn-ghost">
                 14-day overview →
               </Link>
+              <Link href="/admin/plants" className="fg-btn-ghost">
+                Manage plants →
+              </Link>
             </>
           )}
           {!isAdmin && !isCleaner && (
