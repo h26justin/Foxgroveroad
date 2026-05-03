@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import TaskRow from './TaskRow'
 import ReportIssueButton from '../issues/ReportIssueButton'
-import OneshotList from '../oneshots/OneshotList'
+import OneshotList, { type OneshotTask } from '../oneshots/OneshotList'
 import PostOneshotButton from '../oneshots/PostOneshotButton'
 import { floorLabel } from '@/lib/floors'
 import {
@@ -125,7 +125,7 @@ export default function HousekeepingClient({
       checkedTemplateIds: string[]
     }
   >
-  oneshotTasks: import('../oneshots/OneshotList').OneshotTask[]
+  oneshotTasks: OneshotTask[]
   profile: Profile
   activeRoomId: string | null
   errorMessage: string | null
@@ -718,6 +718,7 @@ export default function HousekeepingClient({
       <OneshotList
         tasks={oneshotTasks}
         isAdmin={profile.role === 'admin'}
+        currentUserId={profile.id}
       />
 
       {/* Empty state */}

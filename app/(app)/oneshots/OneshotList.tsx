@@ -24,9 +24,11 @@ export type OneshotTask = {
 export default function OneshotList({
   tasks,
   isAdmin,
+  currentUserId,
 }: {
   tasks: OneshotTask[]
   isAdmin: boolean
+  currentUserId: string
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -172,7 +174,11 @@ export default function OneshotList({
 
               {t.photos.length > 0 && (
                 <div className="mt-3">
-                  <AttachmentGallery attachments={t.photos} />
+                  <AttachmentGallery
+                    attachments={t.photos}
+                    currentUserId={currentUserId}
+                    isAdmin={isAdmin}
+                  />
                 </div>
               )}
             </div>
