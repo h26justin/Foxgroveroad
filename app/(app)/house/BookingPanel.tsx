@@ -395,11 +395,18 @@ export default function BookingPanel({
     )
   }
 
-  const guestName =
-    primaryRequest?.profiles?.full_name ??
-    booking?.profiles?.full_name ??
-    booking?.guest_name ??
-    'Unknown'
+  // Header name resolution:
+  //   - If a specific bed booking is open (user tapped a calendar bar),
+  //     show the guest in THAT bed first, falling back to the booking's
+  //     guest_name, then to the requester (legacy paths).
+  //   - If only a request is open (user tapped a strip item), show the
+  //     requester's name — there's no specific bed/guest to highlight.
+  const guestName = booking
+    ? booking.guest_name ??
+      booking.profiles?.full_name ??
+      primaryRequest?.profiles?.full_name ??
+      'Unknown'
+    : primaryRequest?.profiles?.full_name ?? 'Unknown'
   const dates = primaryRequest
     ? formatDateRange(primaryRequest.check_in, primaryRequest.check_out)
     : booking

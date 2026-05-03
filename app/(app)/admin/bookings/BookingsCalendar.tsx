@@ -140,7 +140,7 @@ export default function BookingsCalendar({
 
     setDrag({
       bookingId: booking.id,
-      name: booking.profiles?.full_name ?? booking.guest_name ?? 'Guest',
+      name: booking.guest_name ?? booking.profiles?.full_name ?? 'Guest',
       originalCheckIn: booking.check_in,
       originalCheckOut: booking.check_out,
       originalRoomId: booking.beds.room_id,
@@ -748,7 +748,7 @@ function BookingBar({
 
   const leftPx = visibleStart * DAY_WIDTH_PX
   const widthPx = (visibleEnd - visibleStart) * DAY_WIDTH_PX
-  const name = booking.profiles?.full_name ?? booking.guest_name ?? 'Guest'
+  const name = booking.guest_name ?? booking.profiles?.full_name ?? 'Guest'
 
   // Tap-vs-drag detection
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null)

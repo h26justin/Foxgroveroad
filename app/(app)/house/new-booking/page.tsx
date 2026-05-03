@@ -11,27 +11,24 @@ export default async function NewBookingPage() {
   ])
   if (profile.role !== 'admin') redirect('/house')
 
-  // The "book on behalf of" picker shows guests who have a linked
-  // account (since booking_requests requires a profile-id requester).
-  // For unlinked guests (the casual ones), admin can either link them
-  // first or assign them to bed pills after creating a booking.
+  // All known guests (linked or not). Admin picks from this list when
+  // adding existing guests to a booking.
   const { data: guestsRaw } = await supabase
     .from('guests')
     .select(
       'id, full_name, linked_profile_id, profiles:profiles!guests_linked_profile_id_fkey(role)',
     )
-    .not('linked_profile_id', 'is', null)
     .order('full_name')
 
-  const guestsWithAccounts = ((guestsRaw as any[]) ?? []).map((g) => ({
-    guest_id: g.id,
-    profile_id: g.linked_profile_id as string,
+  const allGuests = ((guestsRaw as any[]) ?? []).map((g) => ({
+    id: g.id,
     full_name: g.full_name,
-    role: (g.profiles as any)?.role ?? 'family',
+    linked: !!g.linked_profile_id,
+    role: (g.profiles as any)?.role ?? null,
   }))
 
-  // Profiles available for linking when admin chooses "+ Add new guest"
-  // — i.e. account holders not yet linked to any guest record.
+  // Account holders not yet linked to any guest — for the optional
+  // "link to account" picker on a typed-new guest.
   const { data: existingLinks } = await supabase
     .from('guests')
     .select('linked_profile_id')
@@ -51,7 +48,7 @@ export default async function NewBookingPage() {
   )
 
   return (
-    <div className="max-w-xl">
+    <div className="max-w-2xl">
       <div className="mb-4">
         <Link
           href="/house"
@@ -71,12 +68,11 @@ export default async function NewBookingPage() {
         className="text-sm fg-mono mb-6"
         style={{ color: 'var(--color-muted)' }}
       >
-        Create an approved booking on someone&apos;s behalf. The list
-        shows guests with linked accounts — for guests without
-        accounts, create the booking and assign them to beds afterward.
+        Pick the dates, list who&apos;s staying, and we&apos;ll take you
+        to the booking panel to assign beds.
       </p>
       <NewBookingClient
-        guestsWithAccounts={guestsWithAccounts}
+        allGuests={allGuests}
         linkableProfiles={linkableProfiles}
       />
     </div>

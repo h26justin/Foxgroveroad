@@ -363,3 +363,169 @@ export async function deleteBookingPermanently(
   revalidatePath('/bookings')
   return { ok: true }
 }
+
+/**
+ * Create an approved booking with a list of guests staying. Replaces
+ * createBookingForUser for the new admin booking flow.
+ *
+ * The form submits:
+ *   check_in, check_out
+ *   adults, children
+ *   notes (optional)
+ *   guests — JSON-stringified array of:
+ *       { guest_id?: string }                     // existing guest
+ *       | { full_name: string, link_profile_id?: string }  // new guest
+ *
+ * Behaviour:
+ *   - The booking_requests.requested_by is set to the calling admin's
+ *     own profile id (audit trail for "who created this booking").
+ *   - For each new-guest entry, a guests row is created auto-magically
+ *     (so admin doesn't have to pre-add guests separately).
+ *   - All resolved guests are attached via booking_request_guests.
+ *
+ * Returns the new request_id so the UI can navigate to /house?request=…
+ * and let admin assign beds via the panel.
+ */
+export async function createBookingWithGuests(
+  formData: FormData,
+): Promise<{ ok?: true; request_id?: string; error?: string }> {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+
+  const checkIn = String(formData.get('check_in') ?? '').trim()
+  const checkOut = String(formData.get('check_out') ?? '').trim()
+  const adultsRaw = String(formData.get('adults') ?? '1').trim()
+  const childrenRaw = String(formData.get('children') ?? '0').trim()
+  const notes = String(formData.get('notes') ?? '').trim() || null
+  const guestsJson = String(formData.get('guests') ?? '[]')
+
+  if (!checkIn || !checkOut) return { error: 'Missing dates' }
+  if (checkIn >= checkOut) return { error: 'Check-out must be after check-in' }
+
+  const adults = parseInt(adultsRaw, 10)
+  const children = parseInt(childrenRaw, 10)
+  if (!Number.isFinite(adults) || adults < 1 || adults > 20) {
+    return { error: 'Adults must be between 1 and 20' }
+  }
+  if (!Number.isFinite(children) || children < 0 || children > 20) {
+    return { error: 'Children must be between 0 and 20' }
+  }
+
+  // Parse guest list
+  type GuestEntry =
+    | { guest_id: string }
+    | { full_name: string; link_profile_id?: string }
+  let guests: GuestEntry[]
+  try {
+    guests = JSON.parse(guestsJson) as GuestEntry[]
+    if (!Array.isArray(guests)) throw new Error('guests is not an array')
+  } catch {
+    return { error: 'Invalid guests payload' }
+  }
+  if (guests.length === 0) {
+    return { error: 'Add at least one guest staying' }
+  }
+  if (guests.length > 30) {
+    return { error: 'That is a lot of guests — maximum 30' }
+  }
+
+  // Resolve each entry to a guest_id, auto-creating new guests as needed.
+  const resolvedGuestIds: string[] = []
+  for (const entry of guests) {
+    if ('guest_id' in entry && entry.guest_id) {
+      // Verify the id exists (cheap sanity check)
+      const { data: g } = await supabase
+        .from('guests')
+        .select('id')
+        .eq('id', entry.guest_id)
+        .maybeSingle()
+      if (!g) {
+        return {
+          error: 'One of the picked guests no longer exists. Refresh and try again.',
+        }
+      }
+      resolvedGuestIds.push(entry.guest_id)
+    } else if ('full_name' in entry && entry.full_name?.trim()) {
+      const name = entry.full_name.trim()
+      if (name.length > 200) {
+        return { error: `Name "${name.slice(0, 30)}…" is too long` }
+      }
+      // Optional: link to a profile if requested + that profile isn't
+      // already linked to a different guest.
+      let linkProfileId: string | null = null
+      if ('link_profile_id' in entry && entry.link_profile_id) {
+        const { data: existing } = await supabase
+          .from('guests')
+          .select('id, full_name')
+          .eq('linked_profile_id', entry.link_profile_id)
+          .maybeSingle()
+        if (existing) {
+          return {
+            error: `That account is already linked to guest "${existing.full_name}". Pick that guest instead, or unlink first.`,
+          }
+        }
+        linkProfileId = entry.link_profile_id
+      }
+      // Auto-create the guest record
+      const { data: created, error: gErr } = await supabase
+        .from('guests')
+        .insert({
+          full_name: name,
+          linked_profile_id: linkProfileId,
+          created_by: profile.id,
+        })
+        .select('id')
+        .single()
+      if (gErr || !created) {
+        return {
+          error: `Failed to add guest "${name}": ${gErr?.message ?? 'unknown'}`,
+        }
+      }
+      resolvedGuestIds.push(created.id)
+    } else {
+      return { error: 'Empty guest entry — type a name or pick from the list' }
+    }
+  }
+
+  // Insert the booking_request as approved
+  const { data: row, error: insErr } = await supabase
+    .from('booking_requests')
+    .insert({
+      requested_by: profile.id, // admin who created it
+      check_in: checkIn,
+      check_out: checkOut,
+      adults,
+      children,
+      notes,
+      status: 'approved',
+      decided_at: new Date().toISOString(),
+      decided_by: profile.id,
+    })
+    .select('id')
+    .single()
+
+  if (insErr || !row) {
+    return { error: insErr?.message ?? 'Failed to create booking' }
+  }
+  const requestId = row.id
+
+  // Attach guests via the join table
+  const joinRows = resolvedGuestIds.map((guestId, i) => ({
+    request_id: requestId,
+    guest_id: guestId,
+    position: i,
+  }))
+  const { error: joinErr } = await supabase
+    .from('booking_request_guests')
+    .insert(joinRows)
+  if (joinErr) {
+    // Non-fatal — booking exists. Surface to admin so they can retry.
+    return {
+      error: `Booking created but guests failed to attach: ${joinErr.message}. Add them manually in the panel.`,
+    }
+  }
+
+  revalidatePath('/house')
+  revalidatePath('/bookings')
+  return { ok: true, request_id: requestId }
+}
