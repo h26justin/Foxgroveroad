@@ -1162,26 +1162,48 @@ export default function BookingPanel({
                                   {(roomsByFloor.get(floor) ?? []).flatMap(
                                     (room) =>
                                       room.beds.map((bedOpt) => {
-                                        const occupiedHere = (
+                                        const sameBookingPills =
                                           bookingsByBed.get(bedOpt.id) ?? []
-                                        ).length
                                         const occupiedByOther =
                                           allOverlappingBookings.some(
                                             (ob) => ob.bed_id === bedOpt.id,
                                           )
-                                        const disabled =
-                                          occupiedByOther || occupiedHere > 0
+                                        // Only cross-booking conflicts hard-block.
+                                        // Same-booking sharing is allowed (couples, etc).
+                                        const disabled = occupiedByOther
+                                        const sharingWith =
+                                          sameBookingPills.length > 0
+                                            ? sameBookingPills
+                                                .map((p) => p.guest_name ?? 'Guest')
+                                                .join(', ')
+                                            : null
+                                        const isSingle =
+                                          bedOpt.bed_type === 'single' ||
+                                          bedOpt.bed_type === 'cot'
+
+                                        function onClickAssign() {
+                                          // Soft warning if trying to share a Single
+                                          if (
+                                            sameBookingPills.length > 0 &&
+                                            isSingle
+                                          ) {
+                                            const ok = window.confirm(
+                                              `${bedOpt.name} is a single bed and ${sharingWith} is already assigned. Share anyway?`,
+                                            )
+                                            if (!ok) return
+                                          }
+                                          handleAssignGuestToBed(
+                                            g.guest_id,
+                                            bedOpt.id,
+                                          )
+                                        }
+
                                         return (
                                           <button
                                             key={bedOpt.id}
                                             type="button"
                                             disabled={disabled}
-                                            onClick={() =>
-                                              handleAssignGuestToBed(
-                                                g.guest_id,
-                                                bedOpt.id,
-                                              )
-                                            }
+                                            onClick={onClickAssign}
                                             className="text-xs fg-mono"
                                             style={{
                                               padding: '4px 8px',
@@ -1190,7 +1212,9 @@ export default function BookingPanel({
                                               borderRadius: 6,
                                               background: disabled
                                                 ? 'var(--color-warm)'
-                                                : 'white',
+                                                : sharingWith
+                                                  ? '#fff8e6'
+                                                  : 'white',
                                               color: disabled
                                                 ? 'var(--color-muted)'
                                                 : 'var(--color-ink)',
@@ -1198,8 +1222,24 @@ export default function BookingPanel({
                                                 ? 'not-allowed'
                                                 : 'pointer',
                                             }}
+                                            title={
+                                              sharingWith
+                                                ? `Currently: ${sharingWith}`
+                                                : undefined
+                                            }
                                           >
                                             {room.name} · {bedOpt.name}
+                                            {sharingWith && (
+                                              <span
+                                                style={{
+                                                  marginLeft: 6,
+                                                  color: 'var(--color-amber)',
+                                                  fontSize: 10,
+                                                }}
+                                              >
+                                                +share
+                                              </span>
+                                            )}
                                           </button>
                                         )
                                       }),
