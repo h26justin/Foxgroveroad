@@ -1,5 +1,6 @@
 import { requireProfile } from '@/lib/auth'
 import { updateProfile, updateAccessibilityMode } from './actions'
+import InstallSection from './InstallSection'
 
 export default async function SettingsPage({
   searchParams,
@@ -174,6 +175,10 @@ export default async function SettingsPage({
           </button>
         </div>
       </form>
+
+      <div className="mt-6">
+        <InstallSection />
+      </div>
     </div>
   )
 }
