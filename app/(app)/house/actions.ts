@@ -529,3 +529,237 @@ export async function createBookingWithGuests(
   revalidatePath('/bookings')
   return { ok: true, request_id: requestId }
 }
+
+/**
+ * Assign a canonical guest from the booking's guest list to a specific
+ * bed. Creates a `bookings` row with both guest_id (canonical link) and
+ * guest_name (snapshot of the guest's name for display).
+ *
+ * If the guest is already on another bed, that bed booking is moved
+ * (not duplicated) — same canonical guest in two beds would be weird.
+ */
+export async function assignCanonicalGuestToBed(
+  requestId: string,
+  guestId: string,
+  bedId: string,
+): Promise<{ ok?: true; error?: string }> {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+
+  if (!requestId || !guestId || !bedId) return { error: 'Missing details' }
+
+  // Fetch parent request + the guest's canonical name
+  const [reqRes, guestRes] = await Promise.all([
+    supabase
+      .from('booking_requests')
+      .select('id, requested_by, check_in, check_out')
+      .eq('id', requestId)
+      .single(),
+    supabase
+      .from('guests')
+      .select('id, full_name')
+      .eq('id', guestId)
+      .single(),
+  ])
+
+  if (reqRes.error || !reqRes.data) {
+    return { error: 'Booking request not found' }
+  }
+  if (guestRes.error || !guestRes.data) {
+    return { error: 'Guest not found — refresh and try again' }
+  }
+  const req = reqRes.data as any
+  const guest = guestRes.data as any
+
+  // Verify the bed isn't already occupied by another booking on these
+  // dates. RLS handles permissions; this is a UX guard.
+  const { data: conflicts } = await supabase
+    .from('bookings')
+    .select('id, request_id')
+    .eq('bed_id', bedId)
+    .eq('status', 'approved')
+    .lt('check_in', req.check_out)
+    .gt('check_out', req.check_in)
+
+  const conflictingOther = (conflicts ?? []).find(
+    (b: any) => b.request_id !== requestId,
+  )
+  if (conflictingOther) {
+    return {
+      error: 'That bed is occupied by another booking on these dates.',
+    }
+  }
+
+  // If the same canonical guest is already on a different bed for this
+  // booking, move them (delete the old, insert the new). Otherwise
+  // just insert.
+  const { data: existingForGuest } = await supabase
+    .from('bookings')
+    .select('id, bed_id')
+    .eq('request_id', requestId)
+    .eq('guest_id', guestId)
+    .eq('status', 'approved')
+
+  if (existingForGuest && existingForGuest.length > 0) {
+    // If they're already on the target bed, no-op
+    if (existingForGuest.some((b: any) => b.bed_id === bedId)) {
+      return { ok: true }
+    }
+    // Update the existing row to the new bed
+    const { error: updErr } = await supabase
+      .from('bookings')
+      .update({ bed_id: bedId })
+      .eq('id', existingForGuest[0].id)
+    if (updErr) return { error: updErr.message }
+    revalidatePath('/house')
+    revalidatePath('/bedrooms')
+    return { ok: true }
+  }
+
+  // Insert a fresh bed booking for this guest
+  const { error: insErr } = await supabase.from('bookings').insert({
+    bed_id: bedId,
+    request_id: requestId,
+    requested_by: req.requested_by,
+    guest_id: guestId,
+    guest_name: guest.full_name, // snapshot
+    check_in: req.check_in,
+    check_out: req.check_out,
+    status: 'approved',
+    approved_at: new Date().toISOString(),
+    approved_by: profile.id,
+  })
+
+  if (insErr) return { error: insErr.message }
+
+  revalidatePath('/house')
+  revalidatePath('/bedrooms')
+  return { ok: true }
+}
+
+/**
+ * Add a guest to an existing booking's guest list. Either picks an
+ * existing guest (`guest_id`) or auto-creates one from a typed name.
+ *
+ * Does NOT assign to a bed — that's a separate step. The new entry
+ * appears as "unassigned" in the panel until admin drags it.
+ *
+ * Form fields:
+ *   request_id        — required
+ *   guest_id          — optional (existing guest)
+ *   full_name         — optional (new guest, auto-created)
+ *   link_profile_id   — optional (link new guest to an account)
+ */
+export async function addGuestToBookingList(
+  formData: FormData,
+): Promise<{ ok?: true; error?: string }> {
+  const profile = await requireAdmin()
+  const supabase = await createClient()
+
+  const requestId = String(formData.get('request_id') ?? '').trim()
+  const guestIdInput = String(formData.get('guest_id') ?? '').trim()
+  const fullName = String(formData.get('full_name') ?? '').trim()
+  const linkProfileId = String(formData.get('link_profile_id') ?? '').trim() || null
+
+  if (!requestId) return { error: 'Missing booking id' }
+  if (!guestIdInput && !fullName) {
+    return { error: 'Pick a saved guest or type a new name' }
+  }
+
+  let guestId = guestIdInput
+
+  // Auto-create if a new name was typed
+  if (!guestId && fullName) {
+    if (fullName.length > 200) {
+      return { error: 'Name is too long' }
+    }
+    if (linkProfileId) {
+      const { data: existing } = await supabase
+        .from('guests')
+        .select('id, full_name')
+        .eq('linked_profile_id', linkProfileId)
+        .maybeSingle()
+      if (existing) {
+        return {
+          error: `That account is already linked to "${existing.full_name}". Pick that guest instead.`,
+        }
+      }
+    }
+    const { data: created, error: cErr } = await supabase
+      .from('guests')
+      .insert({
+        full_name: fullName,
+        linked_profile_id: linkProfileId,
+        created_by: profile.id,
+      })
+      .select('id')
+      .single()
+    if (cErr || !created) {
+      return { error: cErr?.message ?? 'Failed to add guest' }
+    }
+    guestId = created.id
+  }
+
+  // Determine next position
+  const { data: existingRows } = await supabase
+    .from('booking_request_guests')
+    .select('position')
+    .eq('request_id', requestId)
+    .order('position', { ascending: false })
+    .limit(1)
+  const nextPos = ((existingRows as any[])?.[0]?.position ?? -1) + 1
+
+  // Insert the join row (unique constraint prevents duplicates)
+  const { error: joinErr } = await supabase
+    .from('booking_request_guests')
+    .insert({
+      request_id: requestId,
+      guest_id: guestId,
+      position: nextPos,
+    })
+  if (joinErr) {
+    if ((joinErr.message ?? '').toLowerCase().includes('duplicate')) {
+      return { error: 'That guest is already on this booking.' }
+    }
+    return { error: joinErr.message }
+  }
+
+  revalidatePath('/house')
+  revalidatePath('/bedrooms')
+  return { ok: true }
+}
+
+/**
+ * Remove a canonical guest from a booking's guest list. If they're
+ * currently assigned to any bed for this booking, those bed bookings
+ * are deleted too.
+ */
+export async function removeGuestFromBookingList(
+  requestId: string,
+  guestId: string,
+): Promise<{ ok?: true; error?: string }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  if (!requestId || !guestId) return { error: 'Missing details' }
+
+  // Delete any bed bookings for this (request, guest) combo
+  const { error: bedErr } = await supabase
+    .from('bookings')
+    .delete()
+    .eq('request_id', requestId)
+    .eq('guest_id', guestId)
+  if (bedErr) return { error: `Failed to clear beds: ${bedErr.message}` }
+
+  // Delete the join row
+  const { error: joinErr } = await supabase
+    .from('booking_request_guests')
+    .delete()
+    .eq('request_id', requestId)
+    .eq('guest_id', guestId)
+  if (joinErr) return { error: joinErr.message }
+
+  revalidatePath('/house')
+  revalidatePath('/bedrooms')
+  return { ok: true }
+}

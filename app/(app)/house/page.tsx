@@ -64,6 +64,7 @@ export default async function HousePage({
     childrenRes,
     templatesRes,
     checksRes,
+    brgRes,
     pendingCountRes,
     needsBedsRes,
   ] = await Promise.all([
@@ -82,7 +83,7 @@ export default async function HousePage({
     supabase
       .from('bookings')
       .select(
-        'id, bed_id, check_in, check_out, request_id, guest_name, status, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
+        'id, bed_id, check_in, check_out, request_id, guest_name, guest_id, status, beds:beds!bookings_bed_id_fkey(room_id), profiles:profiles!bookings_requested_by_fkey(full_name)'
       )
       .in('status', ['approved'])
       .lt('check_in', endISO)
@@ -112,6 +113,15 @@ export default async function HousePage({
     supabase
       .from('prearrival_checks')
       .select('id, booking_request_id, template_id, room_id'),
+    // v21/v22: booking guest list — who's on each booking. Joined to
+    // guests for the canonical name. Filter client-side to the
+    // selected request.
+    supabase
+      .from('booking_request_guests')
+      .select(
+        'request_id, guest_id, position, guests:guests!booking_request_guests_guest_id_fkey(id, full_name, linked_profile_id)',
+      )
+      .order('position'),
     // Status-strip counter: pending requests (across all time)
     isAdmin
       ? supabase
@@ -137,6 +147,81 @@ export default async function HousePage({
   const templates = (templatesRes.data as any[]) ?? []
   const checks = (checksRes.data as any[]) ?? []
   const pendingCount = pendingCountRes.count ?? 0
+
+  // v22: build per-request canonical guest list. Each entry is the
+  // guest's id + name. The panel uses this for assigning beds via
+  // pickers rather than free-text typing.
+  const guestsByRequest: Record<
+    string,
+    {
+      guest_id: string
+      full_name: string
+      linked_profile_id: string | null
+      position: number
+    }[]
+  > = {}
+  for (const r of (brgRes.data as any[]) ?? []) {
+    const list = (guestsByRequest[r.request_id] ??= [])
+    if (r.guests) {
+      list.push({
+        guest_id: r.guest_id,
+        full_name: (r.guests as any).full_name ?? '(deleted guest)',
+        linked_profile_id: (r.guests as any).linked_profile_id ?? null,
+        position: r.position ?? 0,
+      })
+    }
+  }
+  for (const k of Object.keys(guestsByRequest)) {
+    guestsByRequest[k].sort((a, b) => a.position - b.position)
+  }
+
+  // Admin-only: fetch the full guest pool + linkable accounts so the
+  // panel's "+ Add guest to booking" picker works without an extra
+  // round-trip. Cheap enough to load eagerly.
+  let allGuestsForPicker: {
+    id: string
+    full_name: string
+    linked: boolean
+    role: string | null
+  }[] = []
+  let linkableProfilesForPicker: {
+    id: string
+    full_name: string
+    role: string
+  }[] = []
+  if (isAdmin) {
+    const [poolRes, allProfRes, existingLinksRes] = await Promise.all([
+      supabase
+        .from('guests')
+        .select(
+          'id, full_name, linked_profile_id, profiles:profiles!guests_linked_profile_id_fkey(role)',
+        )
+        .order('full_name'),
+      supabase
+        .from('profiles')
+        .select('id, full_name, role')
+        .in('role', ['admin', 'family'])
+        .order('full_name'),
+      supabase
+        .from('guests')
+        .select('linked_profile_id')
+        .not('linked_profile_id', 'is', null),
+    ])
+    allGuestsForPicker = ((poolRes.data as any[]) ?? []).map((g) => ({
+      id: g.id,
+      full_name: g.full_name,
+      linked: !!g.linked_profile_id,
+      role: (g.profiles as any)?.role ?? null,
+    }))
+    const linkedSet = new Set(
+      ((existingLinksRes.data as any[]) ?? [])
+        .map((g) => g.linked_profile_id)
+        .filter(Boolean),
+    )
+    linkableProfilesForPicker = ((allProfRes.data as any[]) ?? []).filter(
+      (p: any) => !linkedSet.has(p.id),
+    )
+  }
 
   // Admin-only: fetch guest notes for every requester whose request is
   // visible, by joining on guests.linked_profile_id. The slide-over
@@ -240,6 +325,9 @@ export default async function HousePage({
       templates={templates}
       checks={checks}
       requesterGuestNotesById={requesterGuestNotesById}
+      guestsByRequest={guestsByRequest}
+      allGuestsForPicker={allGuestsForPicker}
+      linkableProfilesForPicker={linkableProfilesForPicker}
       statusCounts={{
         stayingTonight,
         arrivingTomorrow,

@@ -16,6 +16,7 @@ type Booking = {
   check_out: string
   request_id: string | null
   guest_name: string | null
+  guest_id?: string | null
   status: string
   beds: { room_id: string } | null
   profiles: { full_name: string } | null
@@ -79,6 +80,9 @@ export default function HouseClient({
   templates,
   checks,
   requesterGuestNotesById,
+  guestsByRequest,
+  allGuestsForPicker,
+  linkableProfilesForPicker,
   statusCounts,
   selectedBookingId,
   selectedRequestId,
@@ -113,6 +117,26 @@ export default function HouseClient({
       general_notes: string | null
     }
   >
+  guestsByRequest: Record<
+    string,
+    {
+      guest_id: string
+      full_name: string
+      linked_profile_id: string | null
+      position: number
+    }[]
+  >
+  allGuestsForPicker: {
+    id: string
+    full_name: string
+    linked: boolean
+    role: string | null
+  }[]
+  linkableProfilesForPicker: {
+    id: string
+    full_name: string
+    role: string
+  }[]
   statusCounts: {
     stayingTonight: number
     arrivingTomorrow: number
@@ -374,6 +398,11 @@ export default function HouseClient({
                 ? requesterGuestNotesById[selectedRequest.requested_by]
                 : null
             }
+            bookingGuests={
+              selectedRequest ? guestsByRequest[selectedRequest.id] ?? [] : []
+            }
+            allGuestsForPicker={allGuestsForPicker}
+            linkableProfilesForPicker={linkableProfilesForPicker}
             onClose={closePanel}
           />
         </>

@@ -16,6 +16,9 @@ import {
   renameGuest,
   removeGuest,
   togglePrearrivalCheck,
+  assignCanonicalGuestToBed,
+  addGuestToBookingList,
+  removeGuestFromBookingList,
 } from './actions'
 
 type Profile = { id: string; full_name: string; role: string }
@@ -26,6 +29,7 @@ type Booking = {
   check_out: string
   request_id: string | null
   guest_name: string | null
+  guest_id?: string | null
   status: string
   beds: { room_id: string } | null
   profiles: { full_name: string } | null
@@ -89,6 +93,9 @@ export default function BookingPanel({
   templates,
   checksForRequest,
   requesterNotes,
+  bookingGuests,
+  allGuestsForPicker,
+  linkableProfilesForPicker,
   onClose,
 }: {
   profile: Profile
@@ -109,6 +116,23 @@ export default function BookingPanel({
     things_they_bring: string | null
     general_notes: string | null
   } | null
+  bookingGuests: {
+    guest_id: string
+    full_name: string
+    linked_profile_id: string | null
+    position: number
+  }[]
+  allGuestsForPicker: {
+    id: string
+    full_name: string
+    linked: boolean
+    role: string | null
+  }[]
+  linkableProfilesForPicker: {
+    id: string
+    full_name: string
+    role: string
+  }[]
   onClose: () => void
 }) {
   const router = useRouter()
@@ -121,6 +145,17 @@ export default function BookingPanel({
   const [editDatesMode, setEditDatesMode] = useState(false)
   const [newCheckIn, setNewCheckIn] = useState('')
   const [newCheckOut, setNewCheckOut] = useState('')
+
+  // v22: bed-picker state (when admin clicks "Assign bed" on a guest)
+  const [assigningGuestId, setAssigningGuestId] = useState<string | null>(null)
+
+  // v22: "+ Add guest to booking" inline form
+  const [addGuestMode, setAddGuestMode] = useState<'closed' | 'pick' | 'new'>(
+    'closed',
+  )
+  const [pickGuestId, setPickGuestId] = useState('')
+  const [newGuestName, setNewGuestName] = useState('')
+  const [newGuestLinkProfileId, setNewGuestLinkProfileId] = useState('')
 
   // Auto-clear error
   useEffect(() => {
@@ -248,6 +283,81 @@ export default function BookingPanel({
     if (!name?.trim()) return
     startTransition(async () => {
       const r = await addGuestToFirstAvailableBed(primaryRequest.id, name.trim())
+      if (r?.error) {
+        setLocalError(r.error)
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  // v22: assign a canonical guest to a specific bed
+  function handleAssignGuestToBed(guestId: string, bedId: string) {
+    if (!primaryRequest) return
+    setAssigningGuestId(null)
+    startTransition(async () => {
+      const r = await assignCanonicalGuestToBed(primaryRequest.id, guestId, bedId)
+      if (r?.error) {
+        setLocalError(r.error)
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  // v22: add a saved guest to this booking's guest list
+  function handleAddSavedGuestToBooking() {
+    if (!primaryRequest || !pickGuestId) return
+    const fd = new FormData()
+    fd.append('request_id', primaryRequest.id)
+    fd.append('guest_id', pickGuestId)
+    setAddGuestMode('closed')
+    setPickGuestId('')
+    startTransition(async () => {
+      const r = await addGuestToBookingList(fd)
+      if (r?.error) {
+        setLocalError(r.error)
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  // v22: add a new (typed) guest to this booking, auto-creating the
+  // guest record + optionally linking to an account
+  function handleAddNewGuestToBooking() {
+    if (!primaryRequest || !newGuestName.trim()) return
+    const fd = new FormData()
+    fd.append('request_id', primaryRequest.id)
+    fd.append('full_name', newGuestName.trim())
+    if (newGuestLinkProfileId) {
+      fd.append('link_profile_id', newGuestLinkProfileId)
+    }
+    setAddGuestMode('closed')
+    setNewGuestName('')
+    setNewGuestLinkProfileId('')
+    startTransition(async () => {
+      const r = await addGuestToBookingList(fd)
+      if (r?.error) {
+        setLocalError(r.error)
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  // v22: remove a canonical guest from this booking (cascades to bed assignments)
+  function handleRemoveGuestFromBooking(guestId: string, name: string) {
+    if (!primaryRequest) return
+    if (
+      !window.confirm(
+        `Remove ${name} from this booking? Their bed assignment (if any) will be cleared.`,
+      )
+    ) {
+      return
+    }
+    startTransition(async () => {
+      const r = await removeGuestFromBookingList(primaryRequest.id, guestId)
       if (r?.error) {
         setLocalError(r.error)
         return
@@ -457,6 +567,39 @@ export default function BookingPanel({
     if (!bookingsByBed.has(b.bed_id)) bookingsByBed.set(b.bed_id, [])
     bookingsByBed.get(b.bed_id)!.push(b)
   }
+
+  // v22: where each canonical guest is currently assigned (if anywhere).
+  // Built from allBookingsForRequest by guest_id. Used to render the
+  // "On this booking" guest list with assignment status.
+  const bedByCanonicalGuest = new Map<
+    string,
+    { bed_id: string; bed_label: string; room_name: string; booking_id: string }
+  >()
+  // Build a quick lookup from bed_id → bed/room labels
+  const bedLabelsById = new Map<
+    string,
+    { bed_label: string; room_name: string }
+  >()
+  for (const r of rooms) {
+    for (const b of r.beds ?? []) {
+      bedLabelsById.set(b.id, { bed_label: b.name, room_name: r.name })
+    }
+  }
+  for (const b of allBookingsForRequest) {
+    if (!b.guest_id) continue
+    const labels = bedLabelsById.get(b.bed_id)
+    bedByCanonicalGuest.set(b.guest_id, {
+      bed_id: b.bed_id,
+      bed_label: labels?.bed_label ?? '?',
+      room_name: labels?.room_name ?? '?',
+      booking_id: b.id,
+    })
+  }
+
+  // List of guests on this booking who haven't yet been assigned to a bed
+  const unassignedBookingGuests = bookingGuests.filter(
+    (g) => !bedByCanonicalGuest.has(g.guest_id),
+  )
 
   // Group rooms by floor for the bed grid
   const guestRooms = rooms.filter(
@@ -753,6 +896,328 @@ export default function BookingPanel({
           </div>
         )}
 
+        {/* ── On this booking (v22) ── */}
+        {isAdmin && isApproved && primaryRequest && (
+          <div className="fg-panel-section">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="fg-section-label" style={{ marginBottom: 0 }}>
+                On this booking ({bookingGuests.length} guest
+                {bookingGuests.length === 1 ? '' : 's'})
+              </h3>
+              {addGuestMode === 'closed' && (
+                <button
+                  type="button"
+                  onClick={() => setAddGuestMode('pick')}
+                  className="fg-btn-gold text-xs"
+                  style={{ width: 'auto', padding: '6px 10px' }}
+                >
+                  + Add guest
+                </button>
+              )}
+            </div>
+
+            {bookingGuests.length === 0 ? (
+              <p
+                className="text-xs fg-mono mb-3"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                No canonical guests attached yet. The bed pills below
+                still work — you can add legacy guests via the bed
+                assignments grid. To use the new flow, click &ldquo;+
+                Add guest&rdquo;.
+              </p>
+            ) : (
+              <p
+                className="text-xs fg-mono mb-3"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Click &ldquo;Assign bed&rdquo; on an unassigned guest
+                to put them somewhere. × removes them from the booking.
+              </p>
+            )}
+
+            {/* Inline form for + Add guest */}
+            {addGuestMode !== 'closed' && (
+              <div
+                className="mb-3 p-3"
+                style={{
+                  border: '1px solid var(--color-warm)',
+                  borderRadius: 8,
+                  background: 'var(--color-cream)',
+                }}
+              >
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddGuestMode('pick')}
+                    className={
+                      addGuestMode === 'pick' ? 'fg-btn-gold' : 'fg-btn-ghost'
+                    }
+                    style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }}
+                  >
+                    Pick saved
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddGuestMode('new')}
+                    className={
+                      addGuestMode === 'new' ? 'fg-btn-gold' : 'fg-btn-ghost'
+                    }
+                    style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }}
+                  >
+                    + New guest
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddGuestMode('closed')
+                      setPickGuestId('')
+                      setNewGuestName('')
+                      setNewGuestLinkProfileId('')
+                    }}
+                    className="fg-btn-ghost"
+                    style={{
+                      width: 'auto',
+                      padding: '4px 10px',
+                      fontSize: 12,
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                {addGuestMode === 'pick' && (
+                  <>
+                    <select
+                      value={pickGuestId}
+                      onChange={(e) => setPickGuestId(e.target.value)}
+                      className="fg-input"
+                      style={{ fontSize: 13 }}
+                    >
+                      <option value="">— pick a saved guest —</option>
+                      {allGuestsForPicker
+                        .filter(
+                          (g) =>
+                            !bookingGuests.some((bg) => bg.guest_id === g.id),
+                        )
+                        .map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.full_name}
+                            {g.linked ? ` (${g.role})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAddSavedGuestToBooking}
+                      disabled={!pickGuestId}
+                      className="fg-btn-gold text-xs mt-2"
+                      style={{ width: 'auto', padding: '6px 14px' }}
+                    >
+                      Add to booking
+                    </button>
+                  </>
+                )}
+
+                {addGuestMode === 'new' && (
+                  <>
+                    <input
+                      type="text"
+                      value={newGuestName}
+                      onChange={(e) => setNewGuestName(e.target.value)}
+                      placeholder="Guest's full name"
+                      maxLength={200}
+                      className="fg-input"
+                      style={{ fontSize: 13, marginBottom: 8 }}
+                    />
+                    {linkableProfilesForPicker.length > 0 && (
+                      <select
+                        value={newGuestLinkProfileId}
+                        onChange={(e) =>
+                          setNewGuestLinkProfileId(e.target.value)
+                        }
+                        className="fg-input"
+                        style={{ fontSize: 13, marginBottom: 8 }}
+                      >
+                        <option value="">
+                          — link to account (optional) —
+                        </option>
+                        {linkableProfilesForPicker.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.full_name} ({p.role})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddNewGuestToBooking}
+                      disabled={!newGuestName.trim()}
+                      className="fg-btn-gold text-xs"
+                      style={{ width: 'auto', padding: '6px 14px' }}
+                    >
+                      Create &amp; add
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Guest list */}
+            {bookingGuests.length > 0 && (
+              <div className="space-y-2">
+                {bookingGuests.map((g) => {
+                  const bed = bedByCanonicalGuest.get(g.guest_id)
+                  const isAssigning = assigningGuestId === g.guest_id
+                  return (
+                    <div
+                      key={g.guest_id}
+                      className="p-3"
+                      style={{
+                        border: '1px solid var(--color-warm)',
+                        borderRadius: 8,
+                        background: 'var(--color-cream)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div
+                          className="text-sm"
+                          style={{
+                            fontFamily: 'var(--font-serif)',
+                            color: 'var(--color-ink)',
+                          }}
+                        >
+                          {g.full_name}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {bed ? (
+                            <span
+                              className="text-xs fg-mono"
+                              style={{ color: 'var(--color-muted)' }}
+                            >
+                              ✓ {bed.room_name} · {bed.bed_label}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAssigningGuestId(
+                                  isAssigning ? null : g.guest_id,
+                                )
+                              }
+                              className="fg-btn-ghost text-xs"
+                              style={{
+                                width: 'auto',
+                                padding: '4px 10px',
+                                color: 'var(--color-amber)',
+                              }}
+                            >
+                              {isAssigning ? 'Cancel' : 'Assign bed'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoveGuestFromBooking(
+                                g.guest_id,
+                                g.full_name,
+                              )
+                            }
+                            aria-label="Remove from booking"
+                            className="fg-mono"
+                            style={{
+                              background: 'transparent',
+                              color: 'var(--color-red)',
+                              border: 'none',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              fontSize: 14,
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Bed picker for this guest */}
+                      {isAssigning && !bed && (
+                        <div className="mt-3">
+                          <p
+                            className="text-xs fg-mono mb-2"
+                            style={{ color: 'var(--color-muted)' }}
+                          >
+                            Tap a bed to assign {g.full_name}:
+                          </p>
+                          <div className="space-y-2">
+                            {floorOrder.map((floor) => (
+                              <div key={floor}>
+                                <div
+                                  className="text-[10px] fg-mono mb-1"
+                                  style={{ color: 'var(--color-muted)' }}
+                                >
+                                  {floorLabel(floor)}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {(roomsByFloor.get(floor) ?? []).flatMap(
+                                    (room) =>
+                                      room.beds.map((bedOpt) => {
+                                        const occupiedHere = (
+                                          bookingsByBed.get(bedOpt.id) ?? []
+                                        ).length
+                                        const occupiedByOther =
+                                          allOverlappingBookings.some(
+                                            (ob) => ob.bed_id === bedOpt.id,
+                                          )
+                                        const disabled =
+                                          occupiedByOther || occupiedHere > 0
+                                        return (
+                                          <button
+                                            key={bedOpt.id}
+                                            type="button"
+                                            disabled={disabled}
+                                            onClick={() =>
+                                              handleAssignGuestToBed(
+                                                g.guest_id,
+                                                bedOpt.id,
+                                              )
+                                            }
+                                            className="text-xs fg-mono"
+                                            style={{
+                                              padding: '4px 8px',
+                                              border:
+                                                '1px solid var(--color-warm)',
+                                              borderRadius: 6,
+                                              background: disabled
+                                                ? 'var(--color-warm)'
+                                                : 'white',
+                                              color: disabled
+                                                ? 'var(--color-muted)'
+                                                : 'var(--color-ink)',
+                                              cursor: disabled
+                                                ? 'not-allowed'
+                                                : 'pointer',
+                                            }}
+                                          >
+                                            {room.name} · {bedOpt.name}
+                                          </button>
+                                        )
+                                      }),
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Bed assignments ── */}
         {isAdmin && isApproved && (
           <div className="fg-panel-section">
@@ -763,10 +1228,11 @@ export default function BookingPanel({
               <button
                 type="button"
                 onClick={handleAddGuest}
-                className="fg-btn-gold text-xs"
+                className="fg-btn-ghost text-xs"
                 style={{ width: 'auto', padding: '6px 10px' }}
+                title="Legacy: add a free-text guest pill direct to an empty bed"
               >
-                + Add guest
+                + Free-text pill
               </button>
             </div>
 

@@ -38,6 +38,7 @@ type Booking = {
   check_out: string
   request_id: string | null
   guest_name: string | null
+  guest_id?: string | null
   beds: { room_id: string } | null
   profiles: { full_name: string } | null
 }
