@@ -543,6 +543,9 @@ export default async function DashboardPage() {
                   Review {pluralise(pendingRequestsCount, 'pending request')} →
                 </Link>
               )}
+              <Link href="/admin/overview" className="fg-btn-ghost">
+                14-day overview →
+              </Link>
             </>
           )}
           {!isAdmin && !isCleaner && (
