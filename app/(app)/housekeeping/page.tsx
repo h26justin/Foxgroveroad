@@ -8,6 +8,11 @@ import {
   recentSelfLogsForCleaner,
   mondayOfWeek,
 } from '@/lib/cleaner-self-log'
+import {
+  refreshBinCacheIfStale,
+  reminderForToday,
+  formatBinDate,
+} from '@/lib/bin-collections'
 import HousekeepingClient from './HousekeepingClient'
 import LogHoursWidget from './LogHoursWidget'
 
@@ -328,6 +333,12 @@ export default async function HousekeepingPage({
     today,
   )
 
+  // v42: bin-collection reminder. Refreshes the cache if stale (>12h);
+  // costs ~1ms most calls. Reminder is null unless today is the day
+  // before / day of / day after a collection.
+  const binCache = await refreshBinCacheIfStale()
+  const binReminder = reminderForToday(binCache.events, today)
+
   // v41: cleaner self-log widget. Only shown if the user has a linked
   // cleaner record. Admin users can also have a cleaner record (when
   // they fill in for the team) — we don't gate by role.
@@ -345,6 +356,7 @@ export default async function HousekeepingPage({
 
   return (
     <>
+      {binReminder && <BinReminderBanner reminder={binReminder} />}
       {cleaner && (
         <LogHoursWidget
           cleanerName={cleaner.name}
@@ -369,5 +381,80 @@ export default async function HousekeepingPage({
       roomStatuses={Object.fromEntries(roomStatusesMap)}
     />
     </>
+  )
+}
+
+/** Big, action-oriented banner shown at the top of /housekeeping when
+ *  today triggers a bin-related action for the cleaning team. */
+function BinReminderBanner({
+  reminder,
+}: {
+  reminder: NonNullable<ReturnType<typeof reminderForToday>>
+}) {
+  const palette =
+    reminder.kind === 'put_out'
+      ? {
+          bg: 'rgba(217,119,6,0.12)',
+          border: '#d97706',
+          icon: '🌙',
+          headline: 'Put the bins out tonight',
+          sub: 'They go out the evening before the collection so the binmen catch them in the morning.',
+        }
+      : reminder.kind === 'today'
+        ? {
+            bg: 'rgba(22,163,74,0.12)',
+            border: '#16a34a',
+            icon: '🚛',
+            headline: 'Bins are being collected today',
+            sub: 'Once the lorry has been, the bins can come back in.',
+          }
+        : {
+            bg: 'rgba(59,130,246,0.12)',
+            border: '#3b82f6',
+            icon: '🏠',
+            headline: 'Bring the bins back in',
+            sub: 'Collection was yesterday — pull them off the street and onto the property.',
+          }
+
+  return (
+    <section
+      role="status"
+      className="rounded p-4 mb-5"
+      style={{
+        background: palette.bg,
+        borderLeft: `6px solid ${palette.border}`,
+      }}
+    >
+      <div className="flex items-start gap-4">
+        <span aria-hidden style={{ fontSize: 28, lineHeight: '1em' }}>
+          {palette.icon}
+        </span>
+        <div className="flex-1">
+          <div
+            style={{
+              color: 'var(--color-ink)',
+              fontFamily: 'var(--font-serif)',
+              fontSize: 20,
+              marginBottom: 2,
+            }}
+          >
+            {palette.headline}
+          </div>
+          <div
+            className="text-sm"
+            style={{ color: 'var(--color-ink)', marginBottom: 6 }}
+          >
+            {palette.sub}
+          </div>
+          <div
+            className="text-xs fg-mono"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            {formatBinDate(reminder.collectionDate)} ·{' '}
+            {reminder.services.join(' · ')}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }

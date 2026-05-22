@@ -19,6 +19,8 @@ const HINTS: Partial<Record<HouseSettingKey, string>> = {
     'What\'s in the fridge / kitchen for them? Coffee, milk, ground rules, etc.',
   arrival_notes:
     'Anything else they should know on arrival — boiler quirks, parking, alarm code.',
+  bin_calendar_url:
+    'Bromley council iCal URL — either the WasteWorks page (e.g. https://recyclingservices.bromley.gov.uk/waste/6122615) or its /calendar.ics endpoint. The dashboard pulls collection days from here.',
 }
 
 export default async function HouseInfoPage({

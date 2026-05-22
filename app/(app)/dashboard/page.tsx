@@ -11,6 +11,12 @@ import {
   nightsBetween,
   relativeFromToday,
 } from '@/lib/dates'
+import {
+  refreshBinCacheIfStale,
+  nextCollections,
+  reminderForToday,
+} from '@/lib/bin-collections'
+import BinSection from './BinSection'
 
 // Soft 30s cache. Booking and task data changes through user actions
 // elsewhere in the app, all of which call revalidatePath; this ceiling
@@ -59,6 +65,7 @@ export default async function DashboardPage() {
     flags,
     bedroomRoomsRes,
     roomStatuses,
+    binCache,
   ] = await Promise.all([
     // (1) Currently checked-in: approved bookings spanning today
     supabase
@@ -139,6 +146,10 @@ export default async function DashboardPage() {
       .order('name'),
     // (5b) Room statuses — derived from existing data
     getAllRoomStatuses(supabase, today),
+    // (6) Bin collections — auto-refreshes if cache is stale (>12h).
+    // refreshBinCacheIfStale never throws; on error it returns the
+    // previous cache + an error string so the dashboard still renders.
+    refreshBinCacheIfStale(),
   ])
 
   const inHouse = (inHouseRes.data as any[]) ?? []
@@ -176,6 +187,12 @@ export default async function DashboardPage() {
     .sort((a, b) => b[0] - a[0]) // top of house first
     .map(([floor, rooms]) => ({ floor, rooms }))
 
+  // ─── Bin collections (v42) ────────────────────────────────────────
+  const binUpcoming = nextCollections((binCache as any).events ?? [], 3, today)
+  const binReminder = reminderForToday((binCache as any).events ?? [], today)
+  const binNotConfigured = !(binCache as any).source_url
+  const binHasError = !!(binCache as any).error
+
   return (
     <div>
       {/* Title + greeting --------------------------------------------- */}
@@ -195,6 +212,17 @@ export default async function DashboardPage() {
         >
           {greetingFor(profile.full_name)}
         </h1>
+      </div>
+
+      {/* Bin collections (v42) — high priority because the reminder
+          banner needs to be seen first thing on visit. */}
+      <div className="mb-8">
+        <BinSection
+          upcoming={binUpcoming}
+          reminder={binReminder}
+          hasError={binHasError}
+          notConfigured={binNotConfigured}
+        />
       </div>
 
       {/* (0) Pending one-off tasks (v32) ----------------------------- */}
