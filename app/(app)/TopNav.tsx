@@ -126,7 +126,7 @@ export default function TopNav({
   return (
     <header className="fg-topnav">
       <div className="fg-topnav-inner">
-        <Link href="/house" className="fg-topnav-logo" aria-label="Foxgrove Road home">
+        <Link href="/house" prefetch={true} className="fg-topnav-logo" aria-label="Foxgrove Road home">
           <Image
             src="/logo-foxgrove-mark.png"
             alt=""
@@ -146,6 +146,7 @@ export default function TopNav({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`fg-topnav-item${isActive ? ' is-active' : ''}`}
               >
                 <span style={{ fontSize: 14 }}>{item.icon}</span>

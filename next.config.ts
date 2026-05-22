@@ -13,8 +13,13 @@ const nextConfig: NextConfig = {
   // schedule (30s) which is fine for cross-tab freshness.
   experimental: {
     staleTimes: {
-      dynamic: 30,
-      static: 180,
+      // 5 minutes for dynamic pages. Means re-visiting any tab within
+      // 5min serves the cached RSC payload without a server roundtrip.
+      // Mutations call revalidatePath which busts the server cache, so
+      // the user's own edits are reflected on the next nav regardless;
+      // cross-user changes can lag by up to staleTimes.dynamic.
+      dynamic: 300,
+      static: 600,
     },
   },
   // Allow next/image to optimise images served from Supabase Storage.

@@ -12,7 +12,7 @@ import {
   relativeFromToday,
 } from '@/lib/dates'
 import {
-  refreshBinCacheIfStale,
+  getBinCacheWithBackgroundRefresh,
   nextCollections,
   reminderForToday,
 } from '@/lib/bin-collections'
@@ -146,10 +146,10 @@ export default async function DashboardPage() {
       .order('name'),
     // (5b) Room statuses — derived from existing data
     getAllRoomStatuses(supabase, today),
-    // (6) Bin collections — auto-refreshes if cache is stale (>12h).
-    // refreshBinCacheIfStale never throws; on error it returns the
-    // previous cache + an error string so the dashboard still renders.
-    refreshBinCacheIfStale(),
+    // (6) Bin collections — reads cache instantly. If the cache is
+    // stale (>12h), a refresh fires AFTER the response is sent via
+    // next/server.after — never blocks the dashboard render.
+    getBinCacheWithBackgroundRefresh(),
   ])
 
   const inHouse = (inHouseRes.data as any[]) ?? []

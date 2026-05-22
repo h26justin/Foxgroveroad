@@ -9,7 +9,7 @@ import {
   mondayOfWeek,
 } from '@/lib/cleaner-self-log'
 import {
-  refreshBinCacheIfStale,
+  getBinCacheWithBackgroundRefresh,
   reminderForToday,
   formatBinDate,
 } from '@/lib/bin-collections'
@@ -333,10 +333,10 @@ export default async function HousekeepingPage({
     today,
   )
 
-  // v42: bin-collection reminder. Refreshes the cache if stale (>12h);
-  // costs ~1ms most calls. Reminder is null unless today is the day
-  // before / day of / day after a collection.
-  const binCache = await refreshBinCacheIfStale()
+  // v42: bin-collection reminder. Reads cache instantly; refresh fires
+  // in the background after response is sent. Reminder is null unless
+  // today is the day before / day of / day after a collection.
+  const binCache = await getBinCacheWithBackgroundRefresh()
   const binReminder = reminderForToday(binCache.events, today)
 
   // v41: cleaner self-log widget. Only shown if the user has a linked

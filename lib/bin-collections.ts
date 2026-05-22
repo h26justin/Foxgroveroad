@@ -1,4 +1,5 @@
 import 'server-only'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -49,6 +50,34 @@ export async function getBinCache(): Promise<BinCacheRow> {
 }
 
 /**
+ * Read the cache instantly and schedule a background refresh if it's
+ * stale. The dashboard / housekeeping page should use this — never
+ * blocks on the council site.
+ *
+ * Schedules the refresh via Next 16's `after()`, which runs after the
+ * response is sent to the user. Worst-case stale window: 12h + one
+ * round-trip after a stale cache is observed.
+ */
+export async function getBinCacheWithBackgroundRefresh(): Promise<BinCacheRow> {
+  const cache = await getBinCache()
+  const ageMs = Date.now() - new Date(cache.fetched_at).getTime()
+  const ttlMs = CACHE_TTL_HOURS * 60 * 60 * 1000
+  if (ageMs >= ttlMs || cache.events.length === 0) {
+    // Schedule the refresh — the user gets the existing (stale or
+    // empty) cache immediately. Errors inside the after callback never
+    // affect the response.
+    after(async () => {
+      try {
+        await refreshBinCacheIfStale(true)
+      } catch (err) {
+        console.warn('[bin-cache] background refresh failed:', err)
+      }
+    })
+  }
+  return cache
+}
+
+/**
  * Refresh the cache if it's stale OR if `force` is true. Pulls the
  * iCal URL from house_settings, parses it, writes the events to the
  * singleton row. Always writes — even on error, we record the error
@@ -56,6 +85,9 @@ export async function getBinCache(): Promise<BinCacheRow> {
  *
  * Uses the admin client because this can be triggered from anywhere
  * (including the dashboard render, where the user might not be admin).
+ *
+ * NOTE: this CAN block for up to 8s on a slow council fetch. Prefer
+ * getBinCacheWithBackgroundRefresh from page render paths.
  */
 export async function refreshBinCacheIfStale(force = false): Promise<BinCacheRow> {
   const current = await getBinCache()
