@@ -2,6 +2,10 @@ import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { isFeatureEnabled } from '@/lib/feature-flags'
+import {
+  selfLoggedHoursForWeek,
+  mondayOfWeek,
+} from '@/lib/cleaner-self-log'
 import PayClient from './PayClient'
 
 export const revalidate = 30
@@ -39,8 +43,34 @@ export default async function PayPage() {
   const rates = ratesRes.data ?? null
   const weeks = (weeksRes.data as any[]) ?? []
 
+  // v41: pull this week's self-logged hours so admin can see what
+  // cleaners reported before typing the weekly totals.
+  const today = new Date().toISOString().slice(0, 10)
+  const currentWeekMonday = mondayOfWeek(today)
+  const selfLogged = await selfLoggedHoursForWeek(currentWeekMonday)
+
   return (
-    <PayClient
+    <>
+      {(selfLogged.linda > 0 || selfLogged.sam > 0) && (
+        <div
+          className="fg-card p-3 mb-4 text-sm"
+          style={{
+            borderLeft: '4px solid var(--color-blue, #3b82f6)',
+            background: 'rgba(59,130,246,0.04)',
+          }}
+        >
+          <strong>Self-logged this week:</strong>{' '}
+          Linda {(selfLogged.linda ?? 0).toFixed(2)}h · Sam{' '}
+          {(selfLogged.sam ?? 0).toFixed(2)}h{' '}
+          <span
+            className="fg-mono text-xs"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            — use as a starting point when filling in the weekly totals below.
+          </span>
+        </div>
+      )}
+      <PayClient
       currentRates={
         rates ?? {
           linda_hourly: 15,
@@ -64,5 +94,6 @@ export default async function PayPage() {
         submitter_name: w.profiles?.full_name ?? 'Unknown',
       }))}
     />
+    </>
   )
 }

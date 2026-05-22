@@ -3,7 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
 import { getAllRoomStatuses } from '@/lib/room-status'
 import { annotatePlants, type Plant, type PlantWatering } from '@/lib/plants'
+import {
+  getCleanerForProfile,
+  recentSelfLogsForCleaner,
+  mondayOfWeek,
+} from '@/lib/cleaner-self-log'
 import HousekeepingClient from './HousekeepingClient'
+import LogHoursWidget from './LogHoursWidget'
 
 // 30s soft cache. Actions that mutate data call revalidatePath('/housekeeping')
 // so any tick/edit by *this* user busts the cache immediately. The 30s ceiling
@@ -322,8 +328,32 @@ export default async function HousekeepingPage({
     today,
   )
 
+  // v41: cleaner self-log widget. Only shown if the user has a linked
+  // cleaner record. Admin users can also have a cleaner record (when
+  // they fill in for the team) — we don't gate by role.
+  const cleaner = await getCleanerForProfile(profile.id)
+  let cleanerLogs: { id: string; date: string; hours: number; notes: string | null }[] = []
+  let weekTotal = 0
+  if (cleaner) {
+    const monday = mondayOfWeek(today)
+    const logs = await recentSelfLogsForCleaner(cleaner.id, 14)
+    cleanerLogs = logs
+    weekTotal = logs
+      .filter((l) => l.date >= monday)
+      .reduce((acc, l) => acc + l.hours, 0)
+  }
+
   return (
-    <HousekeepingClient
+    <>
+      {cleaner && (
+        <LogHoursWidget
+          cleanerName={cleaner.name}
+          recentLogs={cleanerLogs}
+          weekTotal={weekTotal}
+          today={today}
+        />
+      )}
+      <HousekeepingClient
       dueTasks={dueRows}
       completions={(completionsRes.data as any[]) ?? []}
       rooms={(roomsRes.data as any[]) ?? []}
@@ -338,5 +368,6 @@ export default async function HousekeepingPage({
       plants={annotatedPlants}
       roomStatuses={Object.fromEntries(roomStatusesMap)}
     />
+    </>
   )
 }
