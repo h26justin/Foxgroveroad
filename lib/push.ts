@@ -1,26 +1,10 @@
 import 'server-only'
+// @ts-expect-error — web-push ships no types and we don't pull @types/web-push
+import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-// Lazy-load web-push so importing this file doesn't crash if the
-// dependency is missing during dev. Cast to any because we don't ship
-// @types/web-push (would force another devDep).
-//
-// In production, package.json must include "web-push": "^3.6.7" so
-// Vercel installs it during build.
-let _webpush: any = null
-function getWebpush(): any | null {
-  if (_webpush) return _webpush
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    _webpush = require('web-push')
-    return _webpush
-  } catch {
-    return null
-  }
-}
-
 let vapidConfigured = false
-function ensureVapid(wp: any): boolean {
+function ensureVapid(): boolean {
   if (vapidConfigured) return true
   const pub = process.env.VAPID_PUBLIC_KEY
   const priv = process.env.VAPID_PRIVATE_KEY
@@ -31,7 +15,7 @@ function ensureVapid(wp: any): boolean {
     )
     return false
   }
-  wp.setVapidDetails(subject, pub, priv)
+  webpush.setVapidDetails(subject, pub, priv)
   vapidConfigured = true
   return true
 }
@@ -49,12 +33,7 @@ export async function sendPushToUsers(
   payload: { title: string; body: string; url?: string; tag?: string },
 ): Promise<void> {
   if (userIds.length === 0) return
-  const wp = getWebpush()
-  if (!wp) {
-    console.warn('[push] web-push package not installed; skipping')
-    return
-  }
-  if (!ensureVapid(wp)) return
+  if (!ensureVapid()) return
 
   const supabase = createAdminClient()
   const { data: subs, error } = await supabase
@@ -73,7 +52,7 @@ export async function sendPushToUsers(
   await Promise.allSettled(
     subs.map(async (s: any) => {
       try {
-        await wp.sendNotification(
+        await webpush.sendNotification(
           {
             endpoint: s.endpoint,
             keys: { p256dh: s.p256dh, auth: s.auth },

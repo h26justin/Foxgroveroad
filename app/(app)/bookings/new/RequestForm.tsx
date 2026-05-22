@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createBookingRequest } from './actions'
+import { checkAvailability, type AvailabilityResult } from './availability'
 
 type AgeBand = 'infant' | 'toddler' | 'child'
 type SleepArrangement = 'cot' | 'own_bed' | 'sharing_with_parent'
@@ -53,6 +54,34 @@ export default function RequestForm({
   // Adults count is implied by the sharing choice for the simple cases,
   // but we keep an explicit number so larger groups still work.
   const [adultsCount, setAdultsCount] = useState<number>(2)
+
+  // Controlled date inputs so we can drive the availability check.
+  const [checkIn, setCheckIn] = useState<string>(today)
+  const [checkOut, setCheckOut] = useState<string>(tomorrow)
+
+  const [availability, setAvailability] = useState<AvailabilityResult | null>(null)
+  const [availabilityLoading, setAvailabilityLoading] = useState(false)
+
+  // Debounced availability check whenever the date range changes.
+  useEffect(() => {
+    if (!checkIn || !checkOut || checkIn >= checkOut) {
+      setAvailability(null)
+      return
+    }
+    setAvailabilityLoading(true)
+    let cancelled = false
+    const handle = setTimeout(async () => {
+      const res = await checkAvailability(checkIn, checkOut)
+      if (cancelled) return
+      setAvailabilityLoading(false)
+      if (res.ok) setAvailability(res.data)
+      else setAvailability(null)
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [checkIn, checkOut])
 
   // Auto-sync adults count when sharing mode changes between solo/sharing/separate
   // (only adjust the obvious cases — leave it alone if user typed something else)
@@ -125,7 +154,8 @@ export default function RequestForm({
             type="date"
             required
             min={today}
-            defaultValue={today}
+            value={checkIn}
+            onChange={(e) => setCheckIn(e.target.value)}
             className="fg-input"
           />
         </div>
@@ -139,11 +169,19 @@ export default function RequestForm({
             type="date"
             required
             min={tomorrow}
-            defaultValue={tomorrow}
+            value={checkOut}
+            onChange={(e) => setCheckOut(e.target.value)}
             className="fg-input"
           />
         </div>
       </div>
+
+      {/* Availability hint — updates as the user picks dates. Advisory
+          only; final conflict logic runs at approval time. */}
+      <AvailabilityIndicator
+        loading={availabilityLoading}
+        result={availability}
+      />
 
       {/* Adults */}
       <div>
@@ -327,5 +365,61 @@ export default function RequestForm({
         </a>
       </div>
     </form>
+  )
+}
+
+function AvailabilityIndicator({
+  loading,
+  result,
+}: {
+  loading: boolean
+  result: AvailabilityResult | null
+}) {
+  if (loading && !result) {
+    return (
+      <div
+        className="text-xs fg-mono"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        Checking availability…
+      </div>
+    )
+  }
+  if (!result) return null
+
+  const palette = {
+    green: { dot: '#16a34a', bg: 'rgba(22, 163, 74, 0.08)' },
+    yellow: { dot: '#d97706', bg: 'rgba(217, 119, 6, 0.08)' },
+    red: { dot: '#dc2626', bg: 'rgba(220, 38, 38, 0.08)' },
+  }[result.level]
+
+  const label = (() => {
+    if (result.level === 'green') return 'Likely available — no bedrooms booked for these dates.'
+    if (result.level === 'red')
+      return `All ${result.totalRooms} bedrooms are taken for these dates. Approval is unlikely.`
+    // yellow
+    const rooms = result.freeRooms === 1 ? '1 bedroom' : `${result.freeRooms} bedrooms`
+    return `${rooms} still free — admin will confirm bed assignments on approval.`
+  })()
+
+  return (
+    <div
+      className="text-sm flex items-center gap-2 rounded px-3 py-2"
+      style={{ background: palette.bg, color: 'var(--color-ink)' }}
+      role="status"
+      aria-live="polite"
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: palette.dot,
+          flexShrink: 0,
+        }}
+      />
+      <span>{label}</span>
+    </div>
   )
 }

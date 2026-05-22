@@ -3,18 +3,15 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
 
 export async function approveRequest(formData: FormData) {
+  const user = await requireAdmin()
   const id = String(formData.get('id') ?? '')
   if (!id) redirect('/house')
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
-  // RLS will reject if not admin
   const { error } = await supabase
     .from('booking_requests')
     .update({
@@ -41,15 +38,12 @@ export async function approveRequest(formData: FormData) {
 }
 
 export async function declineRequest(formData: FormData) {
+  const user = await requireAdmin()
   const id = String(formData.get('id') ?? '')
   const reason = String(formData.get('reason') ?? '').trim() || null
   if (!id) redirect('/house')
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
   const { error } = await supabase
     .from('booking_requests')

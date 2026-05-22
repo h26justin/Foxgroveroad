@@ -266,14 +266,20 @@ export async function createBookingForUser(
     return { error: 'Children must be between 0 and 20' }
   }
 
-  // Verify the target user exists
+  // Verify the target user exists, isn't soft-deleted, and isn't still
+  // pending approval (booking on behalf of a not-yet-approved signup is
+  // a footgun — the booking would be invisible to them until promoted).
   const { data: targetProfile, error: targetErr } = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, role, is_deleted')
     .eq('id', requestedBy)
+    .eq('is_deleted', false)
     .single()
   if (targetErr || !targetProfile) {
     return { error: 'That user account no longer exists.' }
+  }
+  if ((targetProfile as any).role === 'pending') {
+    return { error: 'That user is still awaiting approval.' }
   }
 
   // Insert directly as approved
@@ -429,61 +435,110 @@ export async function createBookingWithGuests(
     return { error: 'That is a lot of guests — maximum 30' }
   }
 
-  // Resolve each entry to a guest_id, auto-creating new guests as needed.
-  const resolvedGuestIds: string[] = []
+  // Resolve each entry to a guest_id, auto-creating new guests as
+  // needed. Pre-walk classifies the entries; we then run three batched
+  // queries (verify existing ids, check link-profile conflicts, insert
+  // new guests) instead of the up-to-3N round-trips the per-entry loop
+  // would do.
+  type Slot =
+    | { kind: 'existing'; guestId: string }
+    | { kind: 'new'; name: string; linkProfileId: string | null }
+  const slots: Slot[] = []
   for (const entry of guests) {
     if ('guest_id' in entry && entry.guest_id) {
-      // Verify the id exists (cheap sanity check)
-      const { data: g } = await supabase
-        .from('guests')
-        .select('id')
-        .eq('id', entry.guest_id)
-        .maybeSingle()
-      if (!g) {
-        return {
-          error: 'One of the picked guests no longer exists. Refresh and try again.',
-        }
-      }
-      resolvedGuestIds.push(entry.guest_id)
+      slots.push({ kind: 'existing', guestId: entry.guest_id })
     } else if ('full_name' in entry && entry.full_name?.trim()) {
       const name = entry.full_name.trim()
       if (name.length > 200) {
         return { error: `Name "${name.slice(0, 30)}…" is too long` }
       }
-      // Optional: link to a profile if requested + that profile isn't
-      // already linked to a different guest.
-      let linkProfileId: string | null = null
-      if ('link_profile_id' in entry && entry.link_profile_id) {
-        const { data: existing } = await supabase
-          .from('guests')
-          .select('id, full_name')
-          .eq('linked_profile_id', entry.link_profile_id)
-          .maybeSingle()
-        if (existing) {
-          return {
-            error: `That account is already linked to guest "${existing.full_name}". Pick that guest instead, or unlink first.`,
-          }
-        }
-        linkProfileId = entry.link_profile_id
-      }
-      // Auto-create the guest record
-      const { data: created, error: gErr } = await supabase
-        .from('guests')
-        .insert({
-          full_name: name,
-          linked_profile_id: linkProfileId,
-          created_by: profile.id,
-        })
-        .select('id')
-        .single()
-      if (gErr || !created) {
-        return {
-          error: `Failed to add guest "${name}": ${gErr?.message ?? 'unknown'}`,
-        }
-      }
-      resolvedGuestIds.push(created.id)
+      const linkProfileId =
+        'link_profile_id' in entry && entry.link_profile_id
+          ? entry.link_profile_id
+          : null
+      slots.push({ kind: 'new', name, linkProfileId })
     } else {
       return { error: 'Empty guest entry — type a name or pick from the list' }
+    }
+  }
+
+  const existingIds = Array.from(
+    new Set(slots.filter((s) => s.kind === 'existing').map((s) => (s as any).guestId as string)),
+  )
+  const linkProfileIds = Array.from(
+    new Set(
+      slots
+        .filter((s) => s.kind === 'new' && (s as any).linkProfileId)
+        .map((s) => (s as any).linkProfileId as string),
+    ),
+  )
+  const newRows = slots.filter((s) => s.kind === 'new') as Array<
+    Extract<Slot, { kind: 'new' }>
+  >
+
+  // 1) Verify existing guest ids in one query
+  if (existingIds.length > 0) {
+    const { data: found } = await supabase
+      .from('guests')
+      .select('id')
+      .in('id', existingIds)
+    const foundIds = new Set((found ?? []).map((g: any) => g.id as string))
+    if (foundIds.size !== existingIds.length) {
+      return {
+        error: 'One of the picked guests no longer exists. Refresh and try again.',
+      }
+    }
+  }
+
+  // 2) Check link_profile conflicts in one query
+  if (linkProfileIds.length > 0) {
+    const { data: existingLinks } = await supabase
+      .from('guests')
+      .select('id, full_name, linked_profile_id')
+      .in('linked_profile_id', linkProfileIds)
+    if (existingLinks && existingLinks.length > 0) {
+      const first = existingLinks[0] as any
+      return {
+        error: `That account is already linked to guest "${first.full_name}". Pick that guest instead, or unlink first.`,
+      }
+    }
+  }
+
+  // 3) Batch-insert new guests in one query, returning their ids in
+  //    the same order we sent them.
+  const insertedIdsByIndex = new Map<number, string>()
+  if (newRows.length > 0) {
+    const insertPayload = newRows.map((r) => ({
+      full_name: r.name,
+      linked_profile_id: r.linkProfileId,
+      created_by: profile.id,
+    }))
+    const { data: created, error: gErr } = await supabase
+      .from('guests')
+      .insert(insertPayload)
+      .select('id')
+    if (gErr || !created || created.length !== newRows.length) {
+      return {
+        error: `Failed to add guests: ${gErr?.message ?? 'unexpected row count'}`,
+      }
+    }
+    newRows.forEach((_, i) => {
+      insertedIdsByIndex.set(i, (created[i] as any).id as string)
+    })
+  }
+
+  // Reassemble in original order
+  const resolvedGuestIds: string[] = []
+  let newIdx = 0
+  for (const slot of slots) {
+    if (slot.kind === 'existing') {
+      resolvedGuestIds.push(slot.guestId)
+    } else {
+      const id = insertedIdsByIndex.get(newIdx++)
+      if (!id) {
+        return { error: 'Internal: failed to reconcile new guests' }
+      }
+      resolvedGuestIds.push(id)
     }
   }
 

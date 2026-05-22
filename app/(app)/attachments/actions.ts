@@ -45,17 +45,36 @@ export async function uploadAttachment(
   }
   if (file.size === 0) return { error: 'File is empty' }
 
+  // Allow-list of MIME types we'll accept. Anything else gets rejected
+  // server-side so a malicious client can't upload, e.g., text/html with
+  // a .jpg extension and have it served back as HTML from storage (XSS).
+  const allowedMimes = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'image/gif',
+    'application/pdf',
+  ])
+  const mime = (file.type || '').toLowerCase()
+  if (!allowedMimes.has(mime)) {
+    return {
+      error: 'That file type is not allowed. Use JPG, PNG, WEBP, HEIC, GIF, or PDF.',
+    }
+  }
+
   // Build the storage path
   const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
   const safeExt = ext.replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin'
   const filename = `${crypto.randomUUID()}.${safeExt}`
   const storagePath = `${kind}/${entityId}/${filename}`
 
-  // Upload to Storage
+  // Upload to Storage — use validated MIME, not the raw client value.
   const { error: storageErr } = await supabase.storage
     .from('attachments')
     .upload(storagePath, file, {
-      contentType: file.type || 'application/octet-stream',
+      contentType: mime,
       upsert: false,
     })
 
@@ -69,7 +88,7 @@ export async function uploadAttachment(
     .insert({
       created_by: profile.id,
       storage_path: storagePath,
-      mime_type: file.type || 'application/octet-stream',
+      mime_type: mime,
       size_bytes: file.size,
       kind,
       entity_id: entityId,

@@ -48,6 +48,7 @@ export default async function HousekeepingPage({
     allCompletionsRes,
     plantsRes,
     plantWateringsRes,
+    roomStatusesMap,
   ] = await Promise.all([
     supabase
       .from('cleaner_tasks_today')
@@ -124,6 +125,10 @@ export default async function HousekeepingPage({
         .gte('watered_at_date', sixtyDaysAgo)
         .order('watered_at', { ascending: false })
     })(),
+    // Moved into the parallel batch — it was previously awaited inline
+    // in JSX, which forced an extra round-trip after everything above
+    // had already resolved.
+    getAllRoomStatuses(supabase, today),
   ])
 
   // Build map of task_template_id → most recent completion date
@@ -331,7 +336,7 @@ export default async function HousekeepingPage({
       activeRoomId={sp.room ?? null}
       errorMessage={sp.error ?? null}
       plants={annotatedPlants}
-      roomStatuses={Object.fromEntries(await getAllRoomStatuses(supabase, today))}
+      roomStatuses={Object.fromEntries(roomStatusesMap)}
     />
   )
 }

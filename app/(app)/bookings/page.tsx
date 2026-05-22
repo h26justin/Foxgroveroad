@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDateRange, relativeFromToday, todayISO } from '@/lib/dates'
 import CancelBookingButton from './CancelBookingButton'
 
+// 30s soft cache — mutations call revalidatePath('/bookings') so the
+// owner of the change sees it immediately.
+export const revalidate = 30
+
 type RequestRow = {
   id: string
   check_in: string

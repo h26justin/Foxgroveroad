@@ -6,6 +6,14 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  // CSRF: require the Origin header to match the request's own origin.
+  // Server Actions get this for free; route handlers don't.
+  const requestUrl = new URL(request.url)
+  const origin = request.headers.get('origin')
+  if (!origin || new URL(origin).origin !== requestUrl.origin) {
+    return new NextResponse('Bad origin', { status: 403 })
+  }
+
   const { id } = await context.params
   const supabase = await createClient()
   const {
@@ -41,12 +49,11 @@ export async function POST(
     .eq('requested_by', user.id)
     .in('status', ['pending', 'approved'])
 
-  // If the request was approved, also free up its bed assignments.
-  // Otherwise the calendar would still show the cancelled booking
-  // sitting in beds.
-  if (req.status === 'approved') {
-    await supabase.from('bookings').delete().eq('request_id', id)
-  }
+  // Always clear bed assignments, regardless of the stale status we read
+  // above. If the request was approved between our read and our update,
+  // the bookings rows now exist and we still want them gone. Deleting
+  // when there's nothing to delete is a cheap no-op.
+  await supabase.from('bookings').delete().eq('request_id', id)
 
   revalidatePath('/bookings')
   revalidatePath('/house')

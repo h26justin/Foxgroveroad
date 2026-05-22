@@ -9,7 +9,11 @@ export async function login(formData: FormData) {
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
-  const next = (formData.get('next') as string) || '/'
+  // Reject protocol-relative paths (e.g. "//evil.com/foo") so this can't
+  // be used as an open-redirect gadget. Only same-origin relative paths
+  // starting with a single slash are honoured.
+  const nextRaw = (formData.get('next') as string) || '/'
+  const next = nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/'
 
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 

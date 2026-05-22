@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
+import { getActiveAnnouncementFor } from '@/lib/announcements'
+import AnnouncementBanner from './AnnouncementBanner'
 import TopNav from './TopNav'
 
 export default async function AuthedLayout({
@@ -50,8 +52,11 @@ export default async function AuthedLayout({
     }
   }
 
-  // Feature flags — drives which nav tabs appear
-  const featureFlags = await getFeatureFlags()
+  // Feature flags + active announcement in parallel — both independent
+  const [featureFlags, announcement] = await Promise.all([
+    getFeatureFlags(),
+    getActiveAnnouncementFor(profile.id),
+  ])
 
   // Larger-text mode: applied as a class on the shell so any styles
   // that opt in via .fg-acc-large can scale.
@@ -69,6 +74,13 @@ export default async function AuthedLayout({
         openIssueCount={openIssueCount}
         featureFlags={featureFlags}
       />
+      {announcement && (
+        <AnnouncementBanner
+          id={announcement.id}
+          body={announcement.body}
+          dismissible={announcement.dismissible}
+        />
+      )}
       <main>
         <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10">
           {children}

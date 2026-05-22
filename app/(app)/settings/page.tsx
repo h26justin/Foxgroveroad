@@ -1,5 +1,8 @@
+import { headers } from 'next/headers'
 import { requireProfile } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { updateProfile, updateAccessibilityMode } from './actions'
+import CalendarFeedSection from './CalendarFeedSection'
 import InstallSection from './InstallSection'
 import PushNotificationsSection from './PushNotificationsSection'
 
@@ -8,9 +11,30 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>
 }) {
-  const [profile, sp] = await Promise.all([requireProfile(), searchParams])
+  const [profile, sp, supabase, hdrs] = await Promise.all([
+    requireProfile(),
+    searchParams,
+    createClient(),
+    headers(),
+  ])
   const { saved, error } = sp
   const accMode = (profile as any).accessibility_mode ?? 'normal'
+
+  // Look up the user's calendar token + build the absolute feed URL.
+  // We read calendar_token here rather than caching it on the profile
+  // helper so it's never accidentally included in client-side payloads
+  // from other pages.
+  const { data: tokenRow } = await supabase
+    .from('profiles')
+    .select('calendar_token')
+    .eq('id', profile.id)
+    .maybeSingle()
+  const calendarToken = (tokenRow as any)?.calendar_token ?? null
+  const proto = hdrs.get('x-forwarded-proto') ?? 'https'
+  const host = hdrs.get('host') ?? ''
+  const feedUrl = calendarToken
+    ? `${proto}://${host}/api/calendar/${calendarToken}`
+    : null
 
   return (
     <div className="max-w-xl">
@@ -176,6 +200,10 @@ export default async function SettingsPage({
           </button>
         </div>
       </form>
+
+      <div className="mt-6">
+        <CalendarFeedSection feedUrl={feedUrl} />
+      </div>
 
       <div className="mt-6">
         <InstallSection />

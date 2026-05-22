@@ -4,6 +4,9 @@ import { todayISO } from '@/lib/dates'
 import { getAllRoomStatuses } from '@/lib/room-status'
 import HouseClient from './HouseClient'
 
+// 30s soft cache — same pattern as /housekeeping.
+export const revalidate = 30
+
 /** Snap to first of the month for the given ISO date. */
 function firstOfMonthISO(iso: string): string {
   const d = new Date(iso + 'T00:00:00')

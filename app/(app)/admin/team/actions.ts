@@ -51,6 +51,7 @@ async function emailFor(profileId: string): Promise<string | null> {
 // =====================================================================
 
 export async function setUserRole(formData: FormData) {
+  await requireAdmin()
   const supabase = await createClient()
   const profileId = String(formData.get('profile_id') ?? '')
   const role = String(formData.get('role') ?? '')
@@ -74,6 +75,7 @@ export async function setUserRole(formData: FormData) {
 }
 
 export async function linkCleanerProfile(formData: FormData) {
+  await requireAdmin()
   const supabase = await createClient()
   const cleanerId = String(formData.get('cleaner_id') ?? '')
   const profileId = String(formData.get('profile_id') ?? '') || null
@@ -96,6 +98,7 @@ export async function linkCleanerProfile(formData: FormData) {
 }
 
 export async function toggleCleanerActive(formData: FormData) {
+  await requireAdmin()
   const supabase = await createClient()
   const cleanerId = String(formData.get('cleaner_id') ?? '')
   const newActive = String(formData.get('is_active') ?? '') === 'true'

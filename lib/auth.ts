@@ -31,10 +31,15 @@ export const getCurrentProfile = cache(async () => {
   } = await supabase.auth.getUser()
   if (!user) return null
 
+  // Filter is_deleted=false so a soft-deleted user whose JWT hasn't
+  // yet expired can't continue acting in the app. Without this, there's
+  // a window (~JWT TTL) where a banned/anonymised user could still hit
+  // pages until their session refreshes and gets rejected at auth.
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, full_name, role, phone, accessibility_mode')
     .eq('id', user.id)
+    .eq('is_deleted', false)
     .single()
 
   return profile
