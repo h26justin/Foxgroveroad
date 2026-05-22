@@ -16,6 +16,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
+import { logAdminAction } from '@/lib/audit'
 
 import {
   approveRequest as approveRequestImpl,
@@ -108,7 +109,7 @@ export async function togglePrearrivalCheck(
 export async function cancelApprovedBooking(
   requestId: string
 ): Promise<{ ok?: true; error?: string }> {
-  await requireAdmin()
+  const me = await requireAdmin()
   if (!requestId) return { error: 'Missing booking id' }
 
   const supabase = await createClient()
@@ -131,6 +132,13 @@ export async function cancelApprovedBooking(
     .eq('request_id', requestId)
 
   if (bookErr) return { error: bookErr.message }
+
+  await logAdminAction({
+    actorId: me.id,
+    action: 'booking.cancel',
+    targetKind: 'booking_request',
+    targetId: requestId,
+  })
 
   revalidatePath('/house')
   revalidatePath('/bookings')
@@ -319,7 +327,7 @@ export async function createBookingForUser(
 export async function deleteBookingPermanently(
   requestId: string
 ): Promise<{ ok?: true; error?: string }> {
-  await requireAdmin()
+  const me = await requireAdmin()
   const supabase = await createClient()
 
   if (!requestId) return { error: 'Missing booking id' }
@@ -364,6 +372,14 @@ export async function deleteBookingPermanently(
     .delete()
     .eq('id', requestId)
   if (finalErr) return { error: finalErr.message }
+
+  await logAdminAction({
+    actorId: me.id,
+    action: 'booking.delete_permanently',
+    targetKind: 'booking_request',
+    targetId: requestId,
+    payload: { prior_status: req.status },
+  })
 
   revalidatePath('/house')
   revalidatePath('/bookings')

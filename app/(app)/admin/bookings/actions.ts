@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
+import { logAdminAction } from '@/lib/audit'
 
 export async function approveRequest(formData: FormData) {
   const user = await requireAdmin()
@@ -27,6 +28,13 @@ export async function approveRequest(formData: FormData) {
       `/house?error=${encodeURIComponent(error.message)}`
     )
   }
+
+  await logAdminAction({
+    actorId: user.id,
+    action: 'booking.approve',
+    targetKind: 'booking_request',
+    targetId: id,
+  })
 
   revalidatePath('/house')
   revalidatePath('/admin/bookings')
@@ -61,6 +69,14 @@ export async function declineRequest(formData: FormData) {
       `/house?error=${encodeURIComponent(error.message)}`
     )
   }
+
+  await logAdminAction({
+    actorId: user.id,
+    action: 'booking.decline',
+    targetKind: 'booking_request',
+    targetId: id,
+    payload: reason ? { reason } : {},
+  })
 
   revalidatePath('/house')
   revalidatePath('/admin/bookings')

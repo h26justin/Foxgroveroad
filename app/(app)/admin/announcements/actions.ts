@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin, requireProfile } from '@/lib/auth'
+import { logAdminAction } from '@/lib/audit'
 
 export async function createAnnouncement(formData: FormData) {
   const profile = await requireAdmin()
@@ -29,16 +30,28 @@ export async function createAnnouncement(formData: FormData) {
     .update({ is_active: false } as any)
     .eq('is_active', true)
 
-  const { error } = await supabase.from('announcements').insert({
-    body,
-    created_by: profile.id,
-    dismissible,
-    is_active: true,
-  } as any)
+  const { data: inserted, error } = await supabase
+    .from('announcements')
+    .insert({
+      body,
+      created_by: profile.id,
+      dismissible,
+      is_active: true,
+    } as any)
+    .select('id')
+    .single()
 
   if (error) {
     redirect(`/admin/announcements?error=${encodeURIComponent(error.message)}`)
   }
+
+  await logAdminAction({
+    actorId: profile.id,
+    action: 'announcement.create',
+    targetKind: 'announcement',
+    targetId: (inserted as any)?.id ?? null,
+    payload: { body, dismissible },
+  })
 
   revalidatePath('/', 'layout')
   revalidatePath('/admin/announcements')
@@ -46,7 +59,7 @@ export async function createAnnouncement(formData: FormData) {
 }
 
 export async function deactivateAnnouncement(formData: FormData) {
-  await requireAdmin()
+  const me = await requireAdmin()
   const id = String(formData.get('id') ?? '')
   if (!id) redirect('/admin/announcements')
 
@@ -59,6 +72,13 @@ export async function deactivateAnnouncement(formData: FormData) {
   if (error) {
     redirect(`/admin/announcements?error=${encodeURIComponent(error.message)}`)
   }
+
+  await logAdminAction({
+    actorId: me.id,
+    action: 'announcement.retire',
+    targetKind: 'announcement',
+    targetId: id,
+  })
 
   revalidatePath('/', 'layout')
   revalidatePath('/admin/announcements')

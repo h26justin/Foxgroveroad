@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createAdminPublicClient } from '@/lib/supabase/admin-public'
 import { requireAdmin } from '@/lib/auth'
+import { logAdminAction } from '@/lib/audit'
 
 // =====================================================================
 // Helpers
@@ -51,7 +52,7 @@ async function emailFor(profileId: string): Promise<string | null> {
 // =====================================================================
 
 export async function setUserRole(formData: FormData) {
-  await requireAdmin()
+  const me = await requireAdmin()
   const supabase = await createClient()
   const profileId = String(formData.get('profile_id') ?? '')
   const role = String(formData.get('role') ?? '')
@@ -68,6 +69,14 @@ export async function setUserRole(formData: FormData) {
   if (error) {
     redirect(`/admin/team?error=${encodeURIComponent(error.message)}`)
   }
+
+  await logAdminAction({
+    actorId: me.id,
+    action: 'user.role.update',
+    targetKind: 'user',
+    targetId: profileId,
+    payload: { new_role: role },
+  })
 
   revalidatePath('/admin/team')
   revalidatePath('/', 'layout')
@@ -248,6 +257,14 @@ export async function toggleUserBanned(formData: FormData) {
     redirect(`/admin/team?error=${encodeURIComponent(error.message)}`)
   }
 
+  await logAdminAction({
+    actorId: me.id,
+    action: 'user.ban.toggle',
+    targetKind: 'user',
+    targetId: profileId,
+    payload: { banned: shouldBan },
+  })
+
   revalidatePath('/admin/team')
   redirect(
     `/admin/team?saved=${encodeURIComponent(shouldBan ? 'Account disabled' : 'Account re-enabled')}`,
@@ -350,6 +367,14 @@ export async function deleteUser(formData: FormData) {
     redirect(`/admin/team?error=${encodeURIComponent(profileErr.message)}`)
   }
 
+  await logAdminAction({
+    actorId: me.id,
+    action: 'user.delete',
+    targetKind: 'user',
+    targetId: profileId,
+    payload: { deleted_name: realName, rotated_email: rotatedEmail },
+  })
+
   revalidatePath('/admin/team')
   redirect(
     `/admin/team?saved=${encodeURIComponent(`Deleted ${realName}'s account`)}`,
@@ -366,7 +391,7 @@ export async function deleteUser(formData: FormData) {
  * always have access to the new mailbox to click a confirm link.
  */
 export async function updateUserEmail(formData: FormData) {
-  await requireAdmin()
+  const me = await requireAdmin()
   const profileId = String(formData.get('profile_id') ?? '')
   const newEmail = String(formData.get('new_email') ?? '').trim().toLowerCase()
 
@@ -388,6 +413,14 @@ export async function updateUserEmail(formData: FormData) {
     redirect(`/admin/team?error=${encodeURIComponent(error.message)}`)
   }
 
+  await logAdminAction({
+    actorId: me.id,
+    action: 'user.email.update',
+    targetKind: 'user',
+    targetId: profileId,
+    payload: { new_email: newEmail },
+  })
+
   revalidatePath('/admin/team')
   redirect(
     `/admin/team?saved=${encodeURIComponent(`Email updated to ${newEmail}`)}`,
@@ -407,7 +440,7 @@ export async function updateUserEmail(formData: FormData) {
  * keeps the auth row but locks them out and frees the email.
  */
 export async function approvePendingUser(formData: FormData) {
-  await requireAdmin()
+  const me = await requireAdmin()
   const profileId = String(formData.get('profile_id') ?? '')
   const newRole = String(formData.get('role') ?? 'family')
 
@@ -429,6 +462,14 @@ export async function approvePendingUser(formData: FormData) {
   if (error) {
     redirect(`/admin/team?error=${encodeURIComponent(error.message)}`)
   }
+
+  await logAdminAction({
+    actorId: me.id,
+    action: 'user.approve_pending',
+    targetKind: 'user',
+    targetId: profileId,
+    payload: { granted_role: newRole },
+  })
 
   revalidatePath('/admin/team')
   redirect(
