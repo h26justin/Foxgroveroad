@@ -3,6 +3,7 @@ import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { formatDateRange, relativeFromToday, todayISO } from '@/lib/dates'
 import CancelBookingButton from './CancelBookingButton'
+import ArrivalLinkButton from './ArrivalLinkButton'
 
 // 30s soft cache — mutations call revalidatePath('/bookings') so the
 // owner of the change sees it immediately.
@@ -16,6 +17,7 @@ type RequestRow = {
   children: number
   status: string
   notes: string | null
+  arrival_token: string | null
 }
 
 type GuestEntry = { full_name: string; position: number }
@@ -38,7 +40,7 @@ export default async function BookingsPage({
   const { data: requestsRaw } = await supabase
     .from('booking_requests')
     .select(
-      'id, check_in, check_out, adults, children, status, notes, created_at',
+      'id, check_in, check_out, adults, children, status, notes, created_at, arrival_token',
     )
     .eq('requested_by', profile.id)
     .order('check_in', { ascending: false })
@@ -326,6 +328,13 @@ function RequestCard({
             >
               Open in panel →
             </Link>
+          )}
+
+          {/* Arrival packet link — only on approved bookings that have
+              a token (backfilled by 07_arrival_packet.sql for existing
+              approvals). */}
+          {request.status === 'approved' && request.arrival_token && (
+            <ArrivalLinkButton token={request.arrival_token} />
           )}
 
           {canCancel && (
