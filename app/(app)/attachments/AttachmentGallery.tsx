@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { deleteAttachment } from './actions'
@@ -69,8 +70,17 @@ export default function AttachmentGallery({
               className="fg-attachment-thumb-button"
               aria-label="View photo"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={a.signed_url} alt={a.caption ?? ''} />
+              {/* Use Image for srcset + WebP/AVIF conversion. width/height
+                  are sizing hints — CSS in fg-attachment-thumb-button img
+                  controls actual display. */}
+              <Image
+                src={a.signed_url}
+                alt={a.caption ?? ''}
+                width={400}
+                height={400}
+                sizes="(max-width: 640px) 50vw, 200px"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
             </button>
             {canDelete(a) && (
               <button
@@ -163,11 +173,14 @@ function Lightbox({
           ›
         </button>
       )}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={attachment.signed_url}
         alt={attachment.caption ?? ''}
+        width={1600}
+        height={1200}
+        sizes="100vw"
         onClick={(e) => e.stopPropagation()}
+        style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '100%' }}
       />
       {attachment.caption && (
         <div className="fg-lightbox-caption">{attachment.caption}</div>

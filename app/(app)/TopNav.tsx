@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -126,10 +127,12 @@ export default function TopNav({
     <header className="fg-topnav">
       <div className="fg-topnav-inner">
         <Link href="/house" className="fg-topnav-logo" aria-label="Foxgrove Road home">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/logo-foxgrove-mark.png"
             alt=""
+            width={46}
+            height={32}
+            priority
             className="fg-topnav-logo-img"
           />
           <span className="fg-topnav-logo-text">Foxgrove Road</span>

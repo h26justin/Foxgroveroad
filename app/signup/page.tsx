@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { signup } from './actions'
 
@@ -13,12 +14,14 @@ export default async function SignupPage({
       <div className="w-full max-w-[420px]">
         {/* Logo + welcome panel — gold tinted for signup */}
         <div className="mb-6 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/logo-foxgrove.png"
             alt="34 Foxgrove"
+            width={240}
+            height={193}
+            priority
             className="mx-auto"
-            style={{ width: 240, height: 'auto', display: 'block' }}
+            style={{ display: 'block' }}
           />
           <p
             className="fg-mono mt-3 text-[11px] font-semibold tracking-wider"

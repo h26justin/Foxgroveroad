@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { getCurrentProfile } from '@/lib/auth'
 import { landingPathFor } from '@/lib/landing'
@@ -25,12 +26,14 @@ export default async function AwaitingApprovalPage() {
     >
       <div className="w-full max-w-[460px]">
         <div className="mb-6 text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/logo-foxgrove.png"
             alt="Foxgrove Road"
+            width={200}
+            height={161}
+            priority
             className="mx-auto"
-            style={{ width: 200, height: 'auto', display: 'block' }}
+            style={{ display: 'block' }}
           />
         </div>
 
