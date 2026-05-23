@@ -80,9 +80,9 @@ export default function PlantsSection({
 
   async function handleUndo(plant: PlantWithStatus) {
     if (!plant.lastWateringId) return
-    if (!window.confirm(`Untick "${plant.name}" — remove today's watering?`)) {
-      return
-    }
+    // No confirm — clicking Undo on a plant the user JUST watered is
+    // already explicit enough. Optimistic UI + the action being
+    // reversible (just water again) keeps this safe.
     setError(null)
     setBusy(plant.id)
     const prev = plants

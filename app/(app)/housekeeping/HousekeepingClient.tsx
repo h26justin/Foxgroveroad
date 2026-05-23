@@ -1153,15 +1153,7 @@ function CompletedSection({
                 {allowedToUndo && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Untick "${taskName}"? It'll go back into the list as due.`,
-                        )
-                      ) {
-                        onUndo(c)
-                      }
-                    }}
+                    onClick={() => onUndo(c)}
                     className="fg-btn-ghost"
                     style={{
                       width: 'auto',

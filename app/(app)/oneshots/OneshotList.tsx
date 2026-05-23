@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { completeOneshotTask, deleteOneshotTask } from './actions'
+import { completeOneshotTask, deleteOneshotTask, restoreOneshotTask } from './actions'
 import AttachmentGallery from '../attachments/AttachmentGallery'
+import Toast from '../_toast'
 import type { AttachmentWithUrl } from '@/lib/attachments'
 
 export type OneshotTask = {
@@ -34,8 +35,13 @@ export default function OneshotList({
   const [, startTransition] = useTransition()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // v43: track tasks we've optimistically removed so the UI hides them
+  // even before router.refresh fires.
+  const [removed, setRemoved] = useState<Set<string>>(new Set())
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null)
 
-  if (tasks.length === 0) return null
+  const visibleTasks = tasks.filter((t) => !removed.has(t.id))
+  if (visibleTasks.length === 0) return null
 
   async function handleComplete(taskId: string) {
     setError(null)
@@ -49,23 +55,51 @@ export default function OneshotList({
     startTransition(() => router.refresh())
   }
 
-  async function handleDelete(taskId: string, description: string) {
-    if (
-      !window.confirm(
-        `Delete this task?\n\n"${description.slice(0, 80)}${description.length > 80 ? '…' : ''}"\n\nThis can't be undone.`,
-      )
-    ) {
-      return
-    }
+  // v43: delete is now reversible — no confirm dialog, just optimistic
+  // hide + Toast with Undo. Restoring re-inserts the same row id so
+  // any attached photos auto-reappear (they're keyed by entity_id).
+  function handleDelete(task: OneshotTask) {
     setError(null)
-    setBusy(taskId)
-    const r = await deleteOneshotTask(taskId)
-    setBusy(null)
-    if (r.error) {
-      setError(r.error)
-      return
+    // Optimistic hide
+    setRemoved((s) => new Set(s).add(task.id))
+    const snapshot = {
+      id: task.id,
+      description: task.description,
+      priority: task.priority,
+      room_id: task.room_id,
+      created_at: task.created_at,
     }
-    startTransition(() => router.refresh())
+    startTransition(async () => {
+      const r = await deleteOneshotTask(task.id)
+      if (r.error) {
+        setRemoved((s) => {
+          const next = new Set(s)
+          next.delete(task.id)
+          return next
+        })
+        setError(r.error)
+        return
+      }
+      setToast({
+        message: `Deleted task`,
+        undo: () => {
+          setToast(null)
+          startTransition(async () => {
+            const restoreRes = await restoreOneshotTask(snapshot)
+            if (restoreRes.error) {
+              setError(restoreRes.error)
+              return
+            }
+            setRemoved((s) => {
+              const next = new Set(s)
+              next.delete(task.id)
+              return next
+            })
+            router.refresh()
+          })
+        },
+      })
+    })
   }
 
   return (
@@ -77,7 +111,7 @@ export default function OneshotList({
       {error && <div className="fg-msg-error mb-3">{error}</div>}
 
       <div className="space-y-2">
-        {tasks.map((t) => {
+        {visibleTasks.map((t) => {
           const isUrgent = t.priority === 'urgent'
           const isWorking = busy === t.id
           return (
@@ -157,7 +191,7 @@ export default function OneshotList({
                   {isAdmin && (
                     <button
                       type="button"
-                      onClick={() => handleDelete(t.id, t.description)}
+                      onClick={() => handleDelete(t)}
                       disabled={isWorking}
                       className="fg-btn-ghost text-xs"
                       style={{
@@ -185,6 +219,13 @@ export default function OneshotList({
           )
         })}
       </div>
+      {toast && (
+        <Toast
+          message={toast.message}
+          onUndo={toast.undo}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </section>
   )
 }

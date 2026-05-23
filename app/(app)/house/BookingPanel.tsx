@@ -409,12 +409,14 @@ export default function BookingPanel({
     })
   }
 
-  function handleRename(bookingId: string, currentName: string) {
-    const next = window.prompt('Rename guest', currentName)
-    if (next == null) return
-    if (!next.trim() || next.trim() === currentName) return
+  // v43: pill tap now toggles inline edit mode inside PanelPill. This
+  // callback runs when the user commits the new name (Enter or blur),
+  // not when they tap the pill.
+  function handleRename(bookingId: string, newName: string) {
+    const trimmed = newName.trim()
+    if (!trimmed) return
     startTransition(async () => {
-      const r = await renameGuest(bookingId, next.trim())
+      const r = await renameGuest(bookingId, trimmed)
       if (r?.error) {
         setLocalError(r.error)
         return
@@ -1235,16 +1237,14 @@ export default function BookingPanel({
                                           bedOpt.bed_type === 'cot'
 
                                         function onClickAssign() {
-                                          // Soft warning if trying to share a Single
-                                          if (
-                                            sameBookingPills.length > 0 &&
-                                            isSingle
-                                          ) {
-                                            const ok = window.confirm(
-                                              `${bedOpt.name} is a single bed and ${sharingWith} is already assigned. Share anyway?`,
-                                            )
-                                            if (!ok) return
-                                          }
+                                          // v43: no more confirm dialog.
+                                          // The bed button already shows
+                                          // `+share` visually and the
+                                          // tooltip names who's there;
+                                          // couples sharing is the common
+                                          // case for this panel so a
+                                          // blocking dialog was the wrong
+                                          // default.
                                           handleAssignGuestToBed(
                                             g.guest_id,
                                             bedOpt.id,
@@ -1572,11 +1572,61 @@ function PanelPill({
   onPointerDown: (e: React.PointerEvent, id: string, name: string) => void
   onPointerMove: (e: React.PointerEvent) => void
   onPointerUp: (e: React.PointerEvent) => void
-  onTap: (id: string, name: string) => void
+  /** Called on inline-edit commit (Enter or blur with a changed value). */
+  onTap: (id: string, newName: string) => void
   onRemove: (id: string, name: string) => void
 }) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const movedRef = useRef(false)
+  // v43: inline edit replaces window.prompt('Rename guest', …).
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+
+  function commit() {
+    setEditing(false)
+    const next = draft.trim()
+    if (!next || next === name) return
+    onTap(bookingId, next)
+  }
+  function cancel() {
+    setEditing(false)
+    setDraft(name)
+  }
+
+  if (editing) {
+    return (
+      <div className="fg-panel-pill" style={{ padding: 0 }}>
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              cancel()
+            }
+          }}
+          maxLength={200}
+          aria-label="Rename guest"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            font: 'inherit',
+            color: 'inherit',
+            outline: 'none',
+            padding: '4px 8px',
+            minWidth: 80,
+            width: `${Math.max(draft.length, name.length, 4) + 1}ch`,
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div
       className="fg-panel-pill"
@@ -1597,7 +1647,10 @@ function PanelPill({
         const wasTap = s && !movedRef.current && Date.now() - s.t < 300
         startRef.current = null
         onPointerUp(e)
-        if (wasTap) onTap(bookingId, name)
+        if (wasTap) {
+          setDraft(name)
+          setEditing(true)
+        }
       }}
     >
       <span className="fg-panel-pill-name">{name}</span>

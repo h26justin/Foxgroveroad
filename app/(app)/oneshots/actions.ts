@@ -164,3 +164,44 @@ export async function deleteOneshotTask(
   revalidatePath('/housekeeping')
   return { ok: true }
 }
+
+/**
+ * Restore a previously-deleted oneshot task. The caller (the Toast
+ * with Undo button on the housekeeping page) snapshots the task row
+ * before delete and passes the relevant fields back here.
+ *
+ * Photos that were attached via attachments are unaffected — they're
+ * stored separately keyed by entity_id, so they're still in storage
+ * and will re-appear once the task row exists again.
+ */
+export async function restoreOneshotTask(snapshot: {
+  id: string
+  description: string
+  priority: 'normal' | 'urgent'
+  room_id: string | null
+  created_at: string
+}): Promise<{ ok?: true; error?: string }> {
+  const profile = await requireAdmin()
+  if (!snapshot?.id || !snapshot?.description) {
+    return { error: 'Invalid snapshot' }
+  }
+  const supabase = await createClient()
+  const { error } = await supabase.from('oneshot_tasks').insert({
+    id: snapshot.id,
+    description: snapshot.description,
+    priority: snapshot.priority,
+    room_id: snapshot.room_id,
+    status: 'pending',
+    created_at: snapshot.created_at,
+    created_by: profile.id, // best-effort; original creator may differ
+  } as any)
+  if (error) {
+    if ((error.message ?? '').toLowerCase().includes('duplicate')) {
+      // Already restored — treat as success
+      return { ok: true }
+    }
+    return { error: error.message }
+  }
+  revalidatePath('/housekeeping')
+  return { ok: true }
+}
