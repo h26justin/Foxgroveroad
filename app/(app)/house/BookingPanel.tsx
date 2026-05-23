@@ -19,7 +19,9 @@ import {
   assignCanonicalGuestToBed,
   addGuestToBookingList,
   removeGuestFromBookingList,
+  restoreGuestToBookingList,
 } from './actions'
+import Toast from '../_toast'
 
 type Profile = { id: string; full_name: string; role: string }
 type Booking = {
@@ -156,6 +158,17 @@ export default function BookingPanel({
   const [pickGuestId, setPickGuestId] = useState('')
   const [newGuestName, setNewGuestName] = useState('')
   const [newGuestLinkProfileId, setNewGuestLinkProfileId] = useState('')
+  // v43: optional room to auto-assign the guest to in the same submit.
+  // '' means "don't auto-assign" — admin can still pick a bed by hand
+  // afterwards via the Assign bed button.
+  const [addGuestRoomId, setAddGuestRoomId] = useState('')
+
+  // v43: toast for undo-able actions (currently: guest remove). Patterned
+  // after the housekeeping page's tick+undo flow.
+  const [toast, setToast] = useState<{
+    message: string
+    undo?: () => void
+  } | null>(null)
 
   // Auto-clear error
   useEffect(() => {
@@ -305,26 +318,34 @@ export default function BookingPanel({
     })
   }
 
-  // v22: add a saved guest to this booking's guest list
+  // v22: add a saved guest to this booking's guest list. v43: optionally
+  // also assign them to a room in the same submit.
   function handleAddSavedGuestToBooking() {
     if (!primaryRequest || !pickGuestId) return
     const fd = new FormData()
     fd.append('request_id', primaryRequest.id)
     fd.append('guest_id', pickGuestId)
+    if (addGuestRoomId) fd.append('room_id', addGuestRoomId)
     setAddGuestMode('closed')
     setPickGuestId('')
+    setAddGuestRoomId('')
     startTransition(async () => {
       const r = await addGuestToBookingList(fd)
       if (r?.error) {
         setLocalError(r.error)
         return
       }
+      if (r?.warning) {
+        // Guest added but room was full — surface as a soft notice
+        setLocalError(r.warning)
+      }
       router.refresh()
     })
   }
 
   // v22: add a new (typed) guest to this booking, auto-creating the
-  // guest record + optionally linking to an account
+  // guest record + optionally linking to an account. v43: optionally
+  // also assign them to a room in the same submit.
   function handleAddNewGuestToBooking() {
     if (!primaryRequest || !newGuestName.trim()) return
     const fd = new FormData()
@@ -333,35 +354,57 @@ export default function BookingPanel({
     if (newGuestLinkProfileId) {
       fd.append('link_profile_id', newGuestLinkProfileId)
     }
+    if (addGuestRoomId) fd.append('room_id', addGuestRoomId)
     setAddGuestMode('closed')
     setNewGuestName('')
     setNewGuestLinkProfileId('')
+    setAddGuestRoomId('')
     startTransition(async () => {
       const r = await addGuestToBookingList(fd)
       if (r?.error) {
         setLocalError(r.error)
         return
       }
+      if (r?.warning) {
+        setLocalError(r.warning)
+      }
       router.refresh()
     })
   }
 
-  // v22: remove a canonical guest from this booking (cascades to bed assignments)
+  // v22 + v43: remove a canonical guest from this booking. No confirm
+  // dialog — instead we show a toast with Undo that restores the join
+  // entry (bed assignment is lost on remove and cannot be restored
+  // automatically; toast text warns about that).
   function handleRemoveGuestFromBooking(guestId: string, name: string) {
     if (!primaryRequest) return
-    if (
-      !window.confirm(
-        `Remove ${name} from this booking? Their bed assignment (if any) will be cleared.`,
-      )
-    ) {
-      return
-    }
+    const requestId = primaryRequest.id
     startTransition(async () => {
-      const r = await removeGuestFromBookingList(primaryRequest.id, guestId)
+      const r = await removeGuestFromBookingList(requestId, guestId)
       if (r?.error) {
         setLocalError(r.error)
         return
       }
+      setToast({
+        message: `Removed ${name}`,
+        undo: () => {
+          setToast(null)
+          startTransition(async () => {
+            const restoreRes = await restoreGuestToBookingList(
+              requestId,
+              guestId,
+            )
+            if (restoreRes?.error) {
+              setLocalError(restoreRes.error)
+              return
+            }
+            setToast({
+              message: `Restored ${name}. Bed wasn't reassigned — pick one if needed.`,
+            })
+            router.refresh()
+          })
+        },
+      })
       router.refresh()
     })
   }
@@ -993,7 +1036,7 @@ export default function BookingPanel({
                       value={pickGuestId}
                       onChange={(e) => setPickGuestId(e.target.value)}
                       className="fg-input"
-                      style={{ fontSize: 13 }}
+                      style={{ fontSize: 13, marginBottom: 8 }}
                     >
                       <option value="">— pick a saved guest —</option>
                       {allGuestsForPicker
@@ -1008,6 +1051,11 @@ export default function BookingPanel({
                           </option>
                         ))}
                     </select>
+                    <RoomPicker
+                      rooms={rooms}
+                      value={addGuestRoomId}
+                      onChange={setAddGuestRoomId}
+                    />
                     <button
                       type="button"
                       onClick={handleAddSavedGuestToBooking}
@@ -1015,7 +1063,7 @@ export default function BookingPanel({
                       className="fg-btn-gold text-xs mt-2"
                       style={{ width: 'auto', padding: '6px 14px' }}
                     >
-                      Add to booking
+                      {addGuestRoomId ? 'Add & assign' : 'Add to booking'}
                     </button>
                   </>
                 )}
@@ -1050,14 +1098,19 @@ export default function BookingPanel({
                         ))}
                       </select>
                     )}
+                    <RoomPicker
+                      rooms={rooms}
+                      value={addGuestRoomId}
+                      onChange={setAddGuestRoomId}
+                    />
                     <button
                       type="button"
                       onClick={handleAddNewGuestToBooking}
                       disabled={!newGuestName.trim()}
-                      className="fg-btn-gold text-xs"
+                      className="fg-btn-gold text-xs mt-2"
                       style={{ width: 'auto', padding: '6px 14px' }}
                     >
-                      Create &amp; add
+                      {addGuestRoomId ? 'Create, add & assign' : 'Create & add'}
                     </button>
                   </>
                 )}
@@ -1438,6 +1491,13 @@ export default function BookingPanel({
           {drag.name}
         </div>
       )}
+      {toast && (
+        <Toast
+          message={toast.message}
+          onUndo={toast.undo}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </aside>
   )
 }
@@ -1573,6 +1633,53 @@ function hasAnyNotes(notes: {
       notes.room_preference ||
       notes.things_they_bring ||
       notes.general_notes,
+  )
+}
+
+/**
+ * v43: room picker used by the "+ Add guest" flow. Groups bedrooms by
+ * floor and includes an "auto-pick" option for the common case where
+ * the admin doesn't care which specific bed (just that the guest is in
+ * the Attic, etc).
+ */
+function RoomPicker({
+  rooms,
+  value,
+  onChange,
+}: {
+  rooms: Room[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  const bedrooms = rooms.filter((r) => r.room_type === 'bedroom')
+  // Group by floor for clearer scanning
+  const byFloor = new Map<number, Room[]>()
+  for (const r of bedrooms) {
+    if (!byFloor.has(r.floor)) byFloor.set(r.floor, [])
+    byFloor.get(r.floor)!.push(r)
+  }
+  const floorsDesc = Array.from(byFloor.keys()).sort((a, b) => b - a)
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="fg-input"
+      style={{ fontSize: 13, marginBottom: 8 }}
+      aria-label="Room (optional)"
+    >
+      <option value="">— Don&rsquo;t auto-assign a bed —</option>
+      {floorsDesc.map((floor) => (
+        <optgroup key={floor} label={floorLabel(floor)}>
+          {byFloor.get(floor)!.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+              {r.is_owner_room ? ' (owner only)' : ''}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
   )
 }
 

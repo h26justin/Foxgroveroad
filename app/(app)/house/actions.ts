@@ -709,6 +709,75 @@ export async function assignCanonicalGuestToBed(
 }
 
 /**
+ * Pick the first free bed in the given room for the booking's dates,
+ * and assign the canonical guest to it. This is the "one-submit" path
+ * for the common case where admin just wants someone in a room and
+ * doesn't care which specific bed.
+ *
+ * Returns the same shape as assignCanonicalGuestToBed plus the bed_id
+ * that was picked, so the client can surface a friendly confirmation.
+ */
+export async function assignCanonicalGuestToRoom(
+  requestId: string,
+  guestId: string,
+  roomId: string,
+): Promise<{ ok?: true; error?: string; bed_id?: string }> {
+  await requireAdmin()
+  const supabase = await createClient()
+
+  if (!requestId || !guestId || !roomId) return { error: 'Missing details' }
+
+  // Get the booking's date range
+  const { data: req, error: reqErr } = await supabase
+    .from('booking_requests')
+    .select('check_in, check_out')
+    .eq('id', requestId)
+    .single()
+  if (reqErr || !req) return { error: 'Booking not found' }
+
+  // Beds in the target room
+  const { data: beds, error: bedsErr } = await supabase
+    .from('beds')
+    .select('id, bed_type')
+    .eq('room_id', roomId)
+  if (bedsErr) return { error: bedsErr.message }
+  if (!beds || beds.length === 0) {
+    return { error: 'No beds in that room' }
+  }
+
+  const bedIds = beds.map((b: any) => b.id as string)
+
+  // Bookings that already occupy any of those beds in our window. We
+  // exclude bookings under the SAME request (admin can re-assign their
+  // own guests around) — and we treat the same-guest-same-bed case as
+  // a no-op down in assignCanonicalGuestToBed.
+  const { data: conflicts } = await supabase
+    .from('bookings')
+    .select('bed_id, request_id')
+    .eq('status', 'approved')
+    .in('bed_id', bedIds)
+    .lt('check_in', (req as any).check_out)
+    .gt('check_out', (req as any).check_in)
+    .neq('request_id', requestId)
+
+  const occupied = new Set(
+    ((conflicts as any[]) ?? []).map((c) => c.bed_id as string),
+  )
+  const freeBed = (beds as any[]).find((b) => !occupied.has(b.id))
+
+  if (!freeBed) {
+    return {
+      error:
+        'No free beds in that room for these dates — another booking already overlaps.',
+    }
+  }
+
+  const r = await assignCanonicalGuestToBed(requestId, guestId, freeBed.id)
+  if (r.error) return r
+  return { ok: true, bed_id: freeBed.id }
+}
+
+/**
  * Add a guest to an existing booking's guest list. Either picks an
  * existing guest (`guest_id`) or auto-creates one from a typed name.
  *
@@ -720,10 +789,12 @@ export async function assignCanonicalGuestToBed(
  *   guest_id          — optional (existing guest)
  *   full_name         — optional (new guest, auto-created)
  *   link_profile_id   — optional (link new guest to an account)
+ *   room_id           — optional (one-submit: auto-assign to first free
+ *                      bed in this room after creating the guest)
  */
 export async function addGuestToBookingList(
   formData: FormData,
-): Promise<{ ok?: true; error?: string }> {
+): Promise<{ ok?: true; error?: string; warning?: string; assigned_bed_id?: string }> {
   const profile = await requireAdmin()
   const supabase = await createClient()
 
@@ -731,6 +802,9 @@ export async function addGuestToBookingList(
   const guestIdInput = String(formData.get('guest_id') ?? '').trim()
   const fullName = String(formData.get('full_name') ?? '').trim()
   const linkProfileId = String(formData.get('link_profile_id') ?? '').trim() || null
+  // One-submit flow: if a room is picked, auto-assign the guest to the
+  // first free bed in that room after creating/linking the guest.
+  const roomId = String(formData.get('room_id') ?? '').trim() || null
 
   if (!requestId) return { error: 'Missing booking id' }
   if (!guestIdInput && !fullName) {
@@ -795,8 +869,63 @@ export async function addGuestToBookingList(
     return { error: joinErr.message }
   }
 
+  // If a room was picked, chain the bed assignment. We treat this as a
+  // best-effort step: if the room is full, we still return ok (the
+  // guest IS on the booking) with a `warning` so the client can surface
+  // the issue and admin can retry from the bed picker.
+  let assigned_bed_id: string | undefined
+  let warning: string | undefined
+  if (roomId) {
+    const assignRes = await assignCanonicalGuestToRoom(requestId, guestId, roomId)
+    if (assignRes.error) {
+      warning = assignRes.error
+    } else {
+      assigned_bed_id = assignRes.bed_id
+    }
+  }
+
   revalidatePath('/house')
   revalidatePath('/bedrooms')
+  return { ok: true, warning, assigned_bed_id }
+}
+
+/**
+ * Restore a guest that was just removed from a booking's guest list.
+ * Inserts the join row only — bed assignments are NOT restored (the
+ * undo toast warns admin to re-assign).
+ */
+export async function restoreGuestToBookingList(
+  requestId: string,
+  guestId: string,
+): Promise<{ ok?: true; error?: string }> {
+  await requireAdmin()
+  const supabase = await createClient()
+  if (!requestId || !guestId) return { error: 'Missing details' }
+
+  // Find next position
+  const { data: existingRows } = await supabase
+    .from('booking_request_guests')
+    .select('position')
+    .eq('request_id', requestId)
+    .order('position', { ascending: false })
+    .limit(1)
+  const nextPos = ((existingRows as any[])?.[0]?.position ?? -1) + 1
+
+  const { error } = await supabase
+    .from('booking_request_guests')
+    .insert({
+      request_id: requestId,
+      guest_id: guestId,
+      position: nextPos,
+    } as any)
+  if (error) {
+    if ((error.message ?? '').toLowerCase().includes('duplicate')) {
+      // Already restored — treat as success
+      return { ok: true }
+    }
+    return { error: error.message }
+  }
+  revalidatePath('/house')
   return { ok: true }
 }
 

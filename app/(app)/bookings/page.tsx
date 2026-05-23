@@ -220,8 +220,36 @@ function RequestCard({
     byRoom.set(b.room_name, list)
   }
 
+  // Admins can open the booking in the /house panel by clicking anywhere
+  // on the card — uses the stretched-link pattern so interactive
+  // children (Cancel button, Share arrival link) still work. Only
+  // applied to non-terminal bookings to avoid letting admin navigate
+  // into a panel for a cancelled stay.
+  const cardIsClickable =
+    isAdmin &&
+    request.status !== 'cancelled' &&
+    request.status !== 'declined'
+
   return (
-    <div className="fg-card p-5">
+    <div className="fg-card p-5" style={{ position: 'relative' }}>
+      {cardIsClickable && (
+        <Link
+          href={`/house?request=${request.id}`}
+          aria-label="Open booking in panel"
+          className="fg-stretched-link"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            // Keep it invisible but focusable + announceable
+            color: 'transparent',
+            overflow: 'hidden',
+            textIndent: '-9999px',
+          }}
+        >
+          Open
+        </Link>
+      )}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1" style={{ minWidth: 240 }}>
           <div
@@ -315,19 +343,32 @@ function RequestCard({
           )}
         </div>
 
-        {/* Right side: status + actions */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        {/* Right side: status + actions. zIndex pulls interactive
+            controls above the stretched card link so they capture
+            clicks first. */}
+        <div
+          className="flex flex-col items-end gap-2 shrink-0"
+          style={{ position: 'relative', zIndex: 2 }}
+        >
           <StatusPill status={request.status} />
 
-          {/* Edit/manage entry-point (admin only) */}
-          {isAdmin && request.status !== 'cancelled' && request.status !== 'declined' && (
-            <Link
-              href={`/house?request=${request.id}`}
+          {/* Open-in-panel chevron — still rendered as a visible
+              affordance for admin, even though the whole card is now
+              clickable. Keeps discoverability while not stealing the
+              click from the card. */}
+          {cardIsClickable && (
+            <span
+              aria-hidden
               className="fg-btn-ghost text-xs"
-              style={{ width: 'auto', padding: '6px 12px' }}
+              style={{
+                width: 'auto',
+                padding: '6px 12px',
+                opacity: 0.8,
+                pointerEvents: 'none',
+              }}
             >
               Open in panel →
-            </Link>
+            </span>
           )}
 
           {/* Arrival packet link — only on approved bookings that have
