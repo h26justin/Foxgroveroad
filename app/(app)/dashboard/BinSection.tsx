@@ -1,9 +1,9 @@
 import {
   formatBinDate,
-  binIconFor,
   type UpcomingGroup,
   type BinReminder,
 } from '@/lib/bin-collections'
+import BinIcon from '../_bin-icon'
 
 /**
  * Compact upcoming-collections card shown on the dashboard.
@@ -88,12 +88,10 @@ export default function BinSection({
                 {g.services.map((svc) => (
                   <span
                     key={svc}
-                    className="inline-flex items-center gap-1"
+                    className="inline-flex items-center gap-1.5"
                     title={svc}
                   >
-                    <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>
-                      {binIconFor(svc)}
-                    </span>
+                    <BinIcon service={svc} size={18} />
                     <span className="fg-mono">{svc}</span>
                   </span>
                 ))}
@@ -144,10 +142,8 @@ function ReminderBanner({ reminder }: { reminder: BinReminder }) {
           >
             <span className="fg-mono">{formatBinDate(reminder.collectionDate)}</span>
             {reminder.services.map((svc) => (
-              <span key={svc} className="inline-flex items-center gap-1" title={svc}>
-                <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>
-                  {binIconFor(svc)}
-                </span>
+              <span key={svc} className="inline-flex items-center gap-1.5" title={svc}>
+                <BinIcon service={svc} size={18} />
                 <span className="fg-mono">{svc}</span>
               </span>
             ))}

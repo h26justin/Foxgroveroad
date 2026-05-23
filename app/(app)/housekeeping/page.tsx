@@ -12,8 +12,8 @@ import {
   getBinCacheWithBackgroundRefresh,
   reminderForToday,
   formatBinDate,
-  binIconFor,
 } from '@/lib/bin-collections'
+import BinIcon from '../_bin-icon'
 import HousekeepingClient from './HousekeepingClient'
 import LogHoursWidget from './LogHoursWidget'
 
@@ -448,19 +448,17 @@ function BinReminderBanner({
             {palette.sub}
           </div>
           <div
-            className="text-xs flex items-center gap-3 flex-wrap"
+            className="text-sm flex items-center gap-3 flex-wrap"
             style={{ color: 'var(--color-muted)' }}
           >
             <span className="fg-mono">{formatBinDate(reminder.collectionDate)}</span>
             {reminder.services.map((svc) => (
               <span
                 key={svc}
-                className="inline-flex items-center gap-1"
+                className="inline-flex items-center gap-1.5"
                 title={svc}
               >
-                <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>
-                  {binIconFor(svc)}
-                </span>
+                <BinIcon service={svc} size={22} />
                 <span className="fg-mono">{svc}</span>
               </span>
             ))}
