@@ -20,6 +20,21 @@ export default async function NewBookingPage() {
     )
     .order('full_name')
 
+  // Bedrooms for the per-guest Room picker (admin can pick a room
+  // inline so guest creation + bed assignment chain in one flow).
+  const { data: roomsRaw } = await supabase
+    .from('rooms')
+    .select('id, name, floor, is_owner_room')
+    .eq('room_type', 'bedroom')
+    .order('floor', { ascending: false })
+    .order('name')
+  const rooms = ((roomsRaw as any[]) ?? []).map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    floor: r.floor as number,
+    is_owner_room: !!r.is_owner_room,
+  }))
+
   const allGuests = ((guestsRaw as any[]) ?? []).map((g) => ({
     id: g.id,
     full_name: g.full_name,
@@ -74,6 +89,7 @@ export default async function NewBookingPage() {
       <NewBookingClient
         allGuests={allGuests}
         linkableProfiles={linkableProfiles}
+        rooms={rooms}
       />
     </div>
   )

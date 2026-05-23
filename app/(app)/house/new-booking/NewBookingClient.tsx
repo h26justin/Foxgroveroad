@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { floorLabel } from '@/lib/floors'
 import { createBookingWithGuests } from '../actions'
 
 type Guest = {
@@ -11,6 +12,12 @@ type Guest = {
   role: string | null
 }
 type LinkableProfile = { id: string; full_name: string; role: string }
+type Room = {
+  id: string
+  name: string
+  floor: number
+  is_owner_room: boolean
+}
 
 type GuestRow = {
   // Local UI key
@@ -23,6 +30,49 @@ type GuestRow = {
   matchedGuestId: string | null
   // Optional: when typing a new name, admin can link to an account
   linkProfileId: string | null
+  // Optional: per-guest room to auto-assign to. '' = no auto-assign,
+  // admin picks the bed later from the panel.
+  roomId: string
+}
+
+function RoomPickerRow({
+  rooms,
+  value,
+  onChange,
+}: {
+  rooms: Room[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  const byFloor = new Map<number, Room[]>()
+  for (const r of rooms) {
+    if (!byFloor.has(r.floor)) byFloor.set(r.floor, [])
+    byFloor.get(r.floor)!.push(r)
+  }
+  const floorsDesc = Array.from(byFloor.keys()).sort((a, b) => b - a)
+  return (
+    <div className="mt-1">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="fg-input"
+        style={{ fontSize: 13 }}
+        aria-label="Room (optional auto-assign)"
+      >
+        <option value="">— Pick a room (optional, auto-picks bed) —</option>
+        {floorsDesc.map((floor) => (
+          <optgroup key={floor} label={floorLabel(floor)}>
+            {byFloor.get(floor)!.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+                {r.is_owner_room ? ' (owner only)' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  )
 }
 
 function todayISO(): string {
@@ -43,9 +93,11 @@ function newRowKey() {
 export default function NewBookingClient({
   allGuests,
   linkableProfiles,
+  rooms,
 }: {
   allGuests: Guest[]
   linkableProfiles: LinkableProfile[]
+  rooms: Room[]
 }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
@@ -60,8 +112,8 @@ export default function NewBookingClient({
 
   // Start with two empty rows (most stays are at least two people)
   const [rows, setRows] = useState<GuestRow[]>(() => [
-    { rowKey: newRowKey(), name: '', matchedGuestId: null, linkProfileId: null },
-    { rowKey: newRowKey(), name: '', matchedGuestId: null, linkProfileId: null },
+    { rowKey: newRowKey(), name: '', matchedGuestId: null, linkProfileId: null, roomId: '' },
+    { rowKey: newRowKey(), name: '', matchedGuestId: null, linkProfileId: null, roomId: '' },
   ])
 
   function updateRow(rowKey: string, patch: Partial<GuestRow>) {
@@ -75,7 +127,7 @@ export default function NewBookingClient({
   function addRow() {
     setRows((prev) => [
       ...prev,
-      { rowKey: newRowKey(), name: '', matchedGuestId: null, linkProfileId: null },
+      { rowKey: newRowKey(), name: '', matchedGuestId: null, linkProfileId: null, roomId: '' },
     ])
   }
 
@@ -105,14 +157,16 @@ export default function NewBookingClient({
       return
     }
 
-    // Build payload entries
+    // Build payload entries. Per-row room hints (v43) are sent alongside
+    // each guest so the server can chain bed assignment in one pass.
     const guestsPayload = validRows.map((r) => {
-      if (r.matchedGuestId) {
-        return { guest_id: r.matchedGuestId }
-      }
-      return r.linkProfileId
-        ? { full_name: r.name.trim(), link_profile_id: r.linkProfileId }
-        : { full_name: r.name.trim() }
+      const base: any = r.matchedGuestId
+        ? { guest_id: r.matchedGuestId }
+        : r.linkProfileId
+          ? { full_name: r.name.trim(), link_profile_id: r.linkProfileId }
+          : { full_name: r.name.trim() }
+      if (r.roomId) base.room_id = r.roomId
+      return base
     })
 
     setBusy(true)
@@ -130,9 +184,18 @@ export default function NewBookingClient({
       setError(result.error)
       return
     }
+
+    const failures = result.assignment_failures ?? []
+    const savedMsg =
+      failures.length === 0
+        ? 'Booking created'
+        : `Booking created — ${failures.length} bed${
+            failures.length === 1 ? '' : 's'
+          } couldn't auto-assign`
+
     startTransition(() => {
       router.push(
-        `/house?request=${result.request_id}&saved=Booking%20created`,
+        `/house?request=${result.request_id}&saved=${encodeURIComponent(savedMsg)}`,
       )
     })
   }
@@ -307,6 +370,17 @@ export default function NewBookingClient({
                       </select>
                     </div>
                   )}
+
+                  {/* v43: per-guest room picker. Auto-picks first free
+                      bed in the room on save. Optional — admin can still
+                      assign beds from the panel later. */}
+                  <RoomPickerRow
+                    rooms={rooms}
+                    value={row.roomId}
+                    onChange={(roomId) =>
+                      updateRow(row.rowKey, { roomId })
+                    }
+                  />
                 </div>
               )
             })}

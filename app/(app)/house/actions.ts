@@ -410,7 +410,13 @@ export async function deleteBookingPermanently(
  */
 export async function createBookingWithGuests(
   formData: FormData,
-): Promise<{ ok?: true; request_id?: string; error?: string }> {
+): Promise<{
+  ok?: true
+  request_id?: string
+  error?: string
+  /** Non-fatal: rooms picked per-guest that couldn't be auto-assigned. */
+  assignment_failures?: string[]
+}> {
   const profile = await requireAdmin()
   const supabase = await createClient()
 
@@ -456,13 +462,21 @@ export async function createBookingWithGuests(
   // queries (verify existing ids, check link-profile conflicts, insert
   // new guests) instead of the up-to-3N round-trips the per-entry loop
   // would do.
+  //
+  // v43: each slot also carries the optional room_id the caller wants
+  // the guest assigned to. We chain assignCanonicalGuestToRoom for
+  // each one AFTER the booking and guests are created.
   type Slot =
-    | { kind: 'existing'; guestId: string }
-    | { kind: 'new'; name: string; linkProfileId: string | null }
+    | { kind: 'existing'; guestId: string; roomId: string | null }
+    | { kind: 'new'; name: string; linkProfileId: string | null; roomId: string | null }
   const slots: Slot[] = []
   for (const entry of guests) {
+    const roomId =
+      'room_id' in entry && (entry as any).room_id
+        ? ((entry as any).room_id as string)
+        : null
     if ('guest_id' in entry && entry.guest_id) {
-      slots.push({ kind: 'existing', guestId: entry.guest_id })
+      slots.push({ kind: 'existing', guestId: entry.guest_id, roomId })
     } else if ('full_name' in entry && entry.full_name?.trim()) {
       const name = entry.full_name.trim()
       if (name.length > 200) {
@@ -472,7 +486,7 @@ export async function createBookingWithGuests(
         'link_profile_id' in entry && entry.link_profile_id
           ? entry.link_profile_id
           : null
-      slots.push({ kind: 'new', name, linkProfileId })
+      slots.push({ kind: 'new', name, linkProfileId, roomId })
     } else {
       return { error: 'Empty guest entry — type a name or pick from the list' }
     }
@@ -596,9 +610,32 @@ export async function createBookingWithGuests(
     }
   }
 
+  // v43: chain bed assignments for any slot that specified a room. We
+  // collect failures rather than aborting — partial success is fine,
+  // admin sees unassigned guests in the panel and can fix from there.
+  const assignmentFailures: string[] = []
+  for (let i = 0; i < slots.length; i++) {
+    const roomId = (slots[i] as any).roomId as string | null
+    if (!roomId) continue
+    const guestId = resolvedGuestIds[i]
+    const r = await assignCanonicalGuestToRoom(requestId, guestId, roomId)
+    if (r.error) {
+      const nameLabel =
+        slots[i].kind === 'new'
+          ? (slots[i] as any).name
+          : 'a saved guest'
+      assignmentFailures.push(`${nameLabel}: ${r.error}`)
+    }
+  }
+
   revalidatePath('/house')
   revalidatePath('/bookings')
-  return { ok: true, request_id: requestId }
+  return {
+    ok: true,
+    request_id: requestId,
+    assignment_failures:
+      assignmentFailures.length > 0 ? assignmentFailures : undefined,
+  }
 }
 
 /**
