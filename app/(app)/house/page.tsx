@@ -7,21 +7,17 @@ import HouseClient from './HouseClient'
 // 30s soft cache — same pattern as /housekeeping.
 export const revalidate = 30
 
-/** Snap to first of the month for the given ISO date. */
-function firstOfMonthISO(iso: string): string {
+/** Add a number of days to a YYYY-MM-DD date. */
+function addDaysISO(iso: string, delta: number): string {
   const d = new Date(iso + 'T00:00:00')
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+  d.setDate(d.getDate() + delta)
+  return d.toISOString().slice(0, 10)
 }
-function addMonthsISO(iso: string, delta: number): string {
-  const d = new Date(iso + 'T00:00:00')
-  return new Date(d.getFullYear(), d.getMonth() + delta, 1)
-    .toISOString()
-    .slice(0, 10)
-}
-function daysInMonthISO(iso: string): number {
-  const d = new Date(iso + 'T00:00:00')
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-}
+
+/** Calendar window is a rolling 31-day view starting at the given ISO
+ *  date. Default anchor is today, so the user always sees what's
+ *  happening RIGHT NOW first. */
+const WINDOW_DAYS = 31
 
 export default async function HousePage({
   searchParams,
@@ -42,21 +38,39 @@ export default async function HousePage({
 
   const isAdmin = profile.role === 'admin'
   const today = todayISO()
-  const startISO = firstOfMonthISO(sp.start || today)
+  // Default anchor: today. ?start= can override (used by prev/next nav
+  // and by other parts of the app that deep-link into the calendar).
+  const startISO = sp.start || today
   const startDateObj = new Date(startISO + 'T00:00:00')
-  const DAYS_VISIBLE = daysInMonthISO(startISO)
 
   const days: string[] = []
-  for (let i = 0; i < DAYS_VISIBLE; i++) {
+  for (let i = 0; i < WINDOW_DAYS; i++) {
     const d = new Date(startDateObj)
     d.setDate(d.getDate() + i)
     days.push(d.toISOString().slice(0, 10))
   }
   const endISO = days[days.length - 1]
-  const monthLabel = startDateObj.toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-  })
+
+  // Range label, e.g. "23 May → 22 Jun 2026". If start and end fall in
+  // the same month + year, collapse to "1 – 31 May 2026".
+  const endDateObj = new Date(endISO + 'T00:00:00')
+  const sameMonthYear =
+    startDateObj.getFullYear() === endDateObj.getFullYear() &&
+    startDateObj.getMonth() === endDateObj.getMonth()
+  const monthLabel = sameMonthYear
+    ? `${startDateObj.getDate()} – ${endDateObj.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })}`
+    : `${startDateObj.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+      })} → ${endDateObj.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })}`
 
   // ── Parallel data fetch ──────────────────────────────────────────────
   // Everything the page needs in one round-trip burst.
@@ -319,9 +333,9 @@ export default async function HousePage({
       startISO={startISO}
       endISO={endISO}
       days={days}
-      prevStart={addMonthsISO(startISO, -1)}
-      nextStart={addMonthsISO(startISO, +1)}
-      thisMonthStart={firstOfMonthISO(today)}
+      prevStart={addDaysISO(startISO, -WINDOW_DAYS)}
+      nextStart={addDaysISO(startISO, +WINDOW_DAYS)}
+      thisMonthStart={today}
       rooms={roomsWithBeds}
       visibleBookings={visibleBookings}
       visibleRequests={visibleRequests}

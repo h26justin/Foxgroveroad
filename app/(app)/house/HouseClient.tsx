@@ -314,14 +314,16 @@ export default function HouseClient({
         />
       )}
 
-      {/* ─── Month navigation ─── */}
+      {/* ─── Window navigation. The calendar is a rolling 31-day
+            window anchored at the start date — prev/next shift by 31
+            days, "Today" snaps back to today as the first column. ─── */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <Link
           href={`/house?start=${prevStart}`}
           className="fg-btn-ghost text-xs"
           style={{ width: 'auto', padding: '6px 12px' }}
         >
-          ← Previous month
+          ← Earlier
         </Link>
         {startISO !== thisMonthStart && (
           <Link
@@ -329,7 +331,7 @@ export default function HouseClient({
             className="fg-btn-ghost text-xs"
             style={{ width: 'auto', padding: '6px 12px' }}
           >
-            This month
+            Today
           </Link>
         )}
         <Link
@@ -337,7 +339,7 @@ export default function HouseClient({
           className="fg-btn-ghost text-xs"
           style={{ width: 'auto', padding: '6px 12px' }}
         >
-          Next month →
+          Later →
         </Link>
       </div>
 
