@@ -325,6 +325,25 @@ function friendlyServiceName(s: string): string {
   return s.replace(/\s*collection\s*$/i, '').trim()
 }
 
+/**
+ * Pick an emoji for a UK council waste service name. Matches against
+ * common patterns from WasteWorks-powered councils (Bromley, Bexley,
+ * Brent, etc). Order matters — most specific first.
+ */
+export function binIconFor(serviceName: string): string {
+  const s = serviceName.toLowerCase()
+  if (s.includes('food')) return '🥬'
+  if (s.includes('paper') || s.includes('cardboard') || s.includes('card')) return '📦'
+  if (s.includes('garden')) return '🌿'
+  if (s.includes('battery') || s.includes('batteries') || s.includes('electrical')) return '🔋'
+  if (s.includes('textile')) return '👕'
+  if (s.includes('bulky')) return '🛋️'
+  if (s.includes('glass') && !s.includes('mixed')) return '🍾'
+  if (s.includes('recycl')) return '♻️'
+  // Fallback: any non-recyclable / refuse / general waste line
+  return '🗑️'
+}
+
 /** Format a YYYY-MM-DD as "Fri 30 May" using en-GB. */
 export function formatBinDate(iso: string): string {
   const d = new Date(iso + 'T12:00:00Z')

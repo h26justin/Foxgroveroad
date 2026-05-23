@@ -1,5 +1,6 @@
 import {
   formatBinDate,
+  binIconFor,
   type UpcomingGroup,
   type BinReminder,
 } from '@/lib/bin-collections'
@@ -65,14 +66,14 @@ export default function BinSection({
           {upcoming.map((g) => (
             <li
               key={g.date}
-              className="flex items-baseline justify-between gap-3"
+              className="flex items-baseline justify-between gap-3 flex-wrap"
               style={{
                 borderBottom: '1px solid rgba(0,0,0,0.06)',
                 paddingBottom: 6,
               }}
             >
               <span
-                className="text-sm"
+                className="text-sm shrink-0"
                 style={{
                   color: 'var(--color-ink)',
                   fontFamily: 'var(--font-serif)',
@@ -81,10 +82,21 @@ export default function BinSection({
                 {formatBinDate(g.date)}
               </span>
               <span
-                className="text-xs fg-mono text-right"
-                style={{ color: 'var(--color-muted)' }}
+                className="text-xs text-right flex items-center gap-3 flex-wrap justify-end"
+                style={{ color: 'var(--color-ink)' }}
               >
-                {g.services.join(' · ')}
+                {g.services.map((svc) => (
+                  <span
+                    key={svc}
+                    className="inline-flex items-center gap-1"
+                    title={svc}
+                  >
+                    <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>
+                      {binIconFor(svc)}
+                    </span>
+                    <span className="fg-mono">{svc}</span>
+                  </span>
+                ))}
               </span>
             </li>
           ))}
@@ -127,10 +139,18 @@ function ReminderBanner({ reminder }: { reminder: BinReminder }) {
             {headline}
           </div>
           <div
-            className="text-xs fg-mono mt-1"
+            className="text-xs mt-1 flex items-center gap-3 flex-wrap"
             style={{ color: 'var(--color-muted)' }}
           >
-            {formatBinDate(reminder.collectionDate)} · {reminder.services.join(' · ')}
+            <span className="fg-mono">{formatBinDate(reminder.collectionDate)}</span>
+            {reminder.services.map((svc) => (
+              <span key={svc} className="inline-flex items-center gap-1" title={svc}>
+                <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>
+                  {binIconFor(svc)}
+                </span>
+                <span className="fg-mono">{svc}</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>
