@@ -114,12 +114,9 @@ export default function LinenClient({
   }
 
   function handleRecompute() {
-    if (
-      !window.confirm(
-        'Recompute expected linen counts from beds? Existing clean/dirty/washing counts are preserved.'
-      )
-    )
-      return
+    // v43: no more confirm. recomputeLinenFromBeds preserves existing
+    // clean/dirty/washing counts (the message itself said so), so the
+    // dialog was redundant friction.
     startTransition(async () => {
       const result = await recomputeLinenFromBeds()
       if (result?.error) {

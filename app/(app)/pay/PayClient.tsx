@@ -351,6 +351,45 @@ export default function PayClient({
           {existingForWeek ? 'Edit week' : 'Log a week'}
         </h2>
 
+        {/* v43: one-line summary of the rates the hours below will be
+            multiplied by. Saves admin from having to open the rates
+            editor just to check what's current. */}
+        <div
+          className="mb-4 text-xs flex items-baseline gap-2 flex-wrap"
+          style={{
+            color: 'var(--color-muted)',
+            padding: '8px 10px',
+            background: 'var(--color-cream)',
+            borderRadius: 6,
+            border: '1px solid var(--color-warm)',
+          }}
+        >
+          <span className="fg-mono">Rates:</span>
+          <span style={{ color: 'var(--color-ink)' }}>
+            Linda {formatGBP(currentRates.linda_hourly)}/h
+          </span>
+          <span aria-hidden>·</span>
+          <span style={{ color: 'var(--color-ink)' }}>
+            Sam {formatGBP(currentRates.sam_hourly)}/h
+          </span>
+          <span aria-hidden>·</span>
+          <span style={{ color: 'var(--color-ink)' }}>
+            +{formatGBP(currentRates.linda_bonus_per_sam_hour)}/h Linda bonus per Sam-hour
+          </span>
+          <button
+            type="button"
+            onClick={() => setEditingRates(!editingRates)}
+            className="fg-btn-ghost text-xs"
+            style={{
+              width: 'auto',
+              padding: '2px 8px',
+              marginLeft: 'auto',
+            }}
+          >
+            {editingRates ? 'Hide rates' : 'Edit rates'}
+          </button>
+        </div>
+
         {/* Week selector */}
         <div className="mb-4">
           <label className="fg-label">Week starting (Monday)</label>

@@ -487,12 +487,9 @@ export default function HousekeepingClient({
     setSortMode('most_due')
   }
   const resetCustom = () => {
-    if (
-      !window.confirm(
-        'Reset to default ordering? Your custom layout will be lost.'
-      )
-    )
-      return
+    // v43: no confirm — resetting room order is a UI preference, not
+    // data loss. If admin clicks by mistake they can drag rooms back
+    // into their preferred order in seconds.
     setCustomOrder([])
     setMostDueSnapshot(buildSnapshot())
     setSortMode('most_due')
