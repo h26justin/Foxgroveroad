@@ -33,8 +33,9 @@ function mostRecentMondayISO(): string {
   const day = d.getDay()
   const daysSinceMon = day === 0 ? 6 : day - 1
   d.setDate(d.getDate() - daysSinceMon)
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString().slice(0, 10)
+  // v45: format from local getters — toISOString().slice(0,10) returns
+  // UTC which can be a day behind for BST evening hours.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 /**
@@ -138,8 +139,9 @@ export default function PayClient({
 
   // Quick week-shifting buttons
   function shiftWeek(deltaWeeks: number) {
-    const d = new Date(weekStart + 'T00:00:00')
-    d.setDate(d.getDate() + deltaWeeks * 7)
+    // v45: UTC arithmetic, otherwise BST evening clicks shift by 1 day.
+    const d = new Date(weekStart + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() + deltaWeeks * 7)
     setWeekStart(d.toISOString().slice(0, 10))
   }
 

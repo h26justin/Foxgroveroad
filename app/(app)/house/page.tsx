@@ -7,10 +7,13 @@ import HouseClient from './HouseClient'
 // 30s soft cache — same pattern as /housekeeping.
 export const revalidate = 30
 
-/** Add a number of days to a YYYY-MM-DD date. */
+/** Add a number of days to a YYYY-MM-DD date.
+ *  v45: UTC-only arithmetic so the result doesn't shift by ±1 day in
+ *  timezones east of UTC (BST/CEST). The previous local-parse + UTC-
+ *  format combination silently dropped a day. */
 function addDaysISO(iso: string, delta: number): string {
-  const d = new Date(iso + 'T00:00:00')
-  d.setDate(d.getDate() + delta)
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + delta)
   return d.toISOString().slice(0, 10)
 }
 
@@ -41,13 +44,12 @@ export default async function HousePage({
   // Default anchor: today. ?start= can override (used by prev/next nav
   // and by other parts of the app that deep-link into the calendar).
   const startISO = sp.start || today
-  const startDateObj = new Date(startISO + 'T00:00:00')
+  // v45: parse as UTC so the day arithmetic doesn't shift in BST.
+  const startDateObj = new Date(startISO + 'T00:00:00Z')
 
   const days: string[] = []
   for (let i = 0; i < WINDOW_DAYS; i++) {
-    const d = new Date(startDateObj)
-    d.setDate(d.getDate() + i)
-    days.push(d.toISOString().slice(0, 10))
+    days.push(addDaysISO(startISO, i))
   }
   const endISO = days[days.length - 1]
 
@@ -298,11 +300,7 @@ export default async function HousePage({
     (b) => b.check_in <= today && b.check_out > today
   ).length
 
-  const tomorrow = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + 1)
-    return d.toISOString().slice(0, 10)
-  })()
+  const tomorrow = addDaysISO(today, 1)
   const arrivingTomorrow = visibleBookings.filter(
     (b) => b.check_in === tomorrow
   ).length

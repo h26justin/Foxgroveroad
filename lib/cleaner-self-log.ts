@@ -89,11 +89,12 @@ export async function selfLoggedHoursForWeek(
   return totals
 }
 
-/** Monday ISO date for the week containing the given ISO date. */
+/** Monday ISO date for the week containing the given ISO date.
+ *  v45: UTC-only so the result doesn't shift by ±1 day in BST. */
 export function mondayOfWeek(iso: string): string {
-  const d = new Date(iso + 'T00:00:00')
-  const day = d.getDay() // 0 = Sun, 1 = Mon, ...
+  const d = new Date(iso + 'T00:00:00Z')
+  const day = d.getUTCDay() // 0 = Sun, 1 = Mon, ...
   const daysSinceMon = day === 0 ? 6 : day - 1
-  d.setDate(d.getDate() - daysSinceMon)
+  d.setUTCDate(d.getUTCDate() - daysSinceMon)
   return d.toISOString().slice(0, 10)
 }

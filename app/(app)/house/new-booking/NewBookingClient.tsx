@@ -75,13 +75,17 @@ function RoomPickerRow({
   )
 }
 
+// v45: local-getter form so the date matches what the user sees on
+// their wall clock. toISOString().slice(0,10) returns UTC, which is a
+// day BEHIND local for evening hours in BST (UTC+1).
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 function tomorrowISO(): string {
   const d = new Date()
   d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 let _rowCounter = 0

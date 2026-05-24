@@ -23,17 +23,26 @@ const STICKY_LABEL_STYLE: React.CSSProperties = {
 
 // Local copies of the date helpers so this client component doesn't pull
 // the server-only auth-using lib/dates.
+//
+// v45: critical fix — these now operate in UTC. The previous version
+// parsed YYYY-MM-DDT00:00:00 as LOCAL time, which in BST/CEST (UTC+1)
+// gives UTC YYYY-MM-(DD-1)T23:00. The subsequent toISOString().slice(0,10)
+// then returned the WRONG (previous) day, making `addDaysISO('2026-07-07', -1)`
+// return '2026-07-05' instead of '2026-07-06'. This broke the drag
+// preview by one cell — the dotted box rendered one day to the left
+// of where the drop actually landed.
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 }
 function nightsBetween(a: string, b: string): number {
-  const da = new Date(a + 'T00:00:00')
-  const db = new Date(b + 'T00:00:00')
+  const da = new Date(a + 'T00:00:00Z')
+  const db = new Date(b + 'T00:00:00Z')
   return Math.round((db.getTime() - da.getTime()) / 86400000)
 }
 function addDaysISO(iso: string, days: number): string {
-  const d = new Date(iso + 'T00:00:00')
-  d.setDate(d.getDate() + days)
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
 }
 function formatDateRange(a: string, b: string): string {

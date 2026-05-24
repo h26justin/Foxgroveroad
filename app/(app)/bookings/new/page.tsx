@@ -12,9 +12,10 @@ export default async function NewBookingPage({
   const { error } = await searchParams
 
   const today = todayISO()
+  // v45: UTC arithmetic so tomorrow doesn't return today in BST.
   const tomorrow = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + 1)
+    const d = new Date(today + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() + 1)
     return d.toISOString().slice(0, 10)
   })()
 
