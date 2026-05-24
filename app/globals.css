@@ -332,13 +332,26 @@ button, a, label, input[type="checkbox"] {
 }
 .fg-topnav-items::-webkit-scrollbar { display: none; }
 
+/* v44: LogHoursWidget — stack vertically on phones, 3-column on tablet+. */
+.fg-log-hours-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .fg-log-hours-grid {
+    grid-template-columns: auto 1fr auto;
+  }
+}
+
 .fg-topnav-item {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  /* v44: bumped from 8px 12px to give nav items a >= 40px tap target. */
+  padding: 11px 14px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-muted);
   text-decoration: none;
@@ -385,13 +398,15 @@ button, a, label, input[type="checkbox"] {
 }
 .fg-topnav-logout {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-muted);
   background: transparent;
   border: 1px solid var(--color-warm);
   border-radius: 8px;
-  padding: 6px 10px;
+  /* v44: bumped from 6px 10px to give a tappable target on phones. */
+  padding: 10px 14px;
+  min-height: 40px;
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;

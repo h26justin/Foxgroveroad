@@ -80,7 +80,10 @@ export default function LogHoursWidget({
         </div>
       </div>
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'auto 1fr auto' }}>
+      {/* v44: single column on phones (was forced 3-col `auto 1fr auto`
+          which crushed the inputs on < 640px). Switches to the original
+          3-column layout at the sm breakpoint. */}
+      <div className="fg-log-hours-grid">
         <div>
           <label htmlFor="lh-date" className="fg-label">
             Date
@@ -123,7 +126,7 @@ export default function LogHoursWidget({
             onChange={(e) => setHours(e.target.value)}
             placeholder="3.5"
             className="fg-input"
-            style={{ width: 80 }}
+            style={{ width: '100%', maxWidth: 120 }}
           />
         </div>
       </div>

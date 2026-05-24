@@ -82,7 +82,15 @@ export default async function AuthedLayout({
         />
       )}
       <main>
-        <div className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10">
+        {/* v44: paddingBottom honours iOS home-indicator safe area when
+            running as an installed PWA — prevents the last row of a
+            list sitting under the indicator. */}
+        <div
+          className="max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-10"
+          style={{
+            paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
+          }}
+        >
           {children}
         </div>
       </main>

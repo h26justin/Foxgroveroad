@@ -47,13 +47,17 @@ export default function AnnouncementBanner({ id, body, dismissible }: Props) {
             onClick={onDismiss}
             disabled={pending}
             aria-label="Dismiss announcement"
-            className="text-xs fg-mono"
+            className="text-sm fg-mono"
             style={{
               color: 'var(--color-muted)',
-              padding: '2px 6px',
+              // v44: 44x44 tap target — was 16x20.
+              minWidth: 44,
+              minHeight: 44,
+              padding: '10px 12px',
               border: 'none',
               background: 'transparent',
               cursor: 'pointer',
+              lineHeight: 1,
             }}
           >
             ✕

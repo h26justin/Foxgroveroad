@@ -70,8 +70,12 @@ export default async function ArrivalPacketPage({
     <main
       style={{
         background: 'var(--color-cream, #f7f1e8)',
-        minHeight: '100vh',
-        padding: '40px 16px',
+        // v44: 100dvh + safe-area-insets so iPhone home-indicator and
+        // dynamic island don't clip the content. This is the page guests
+        // open on their phone, so a clean mobile render matters.
+        minHeight: '100dvh',
+        padding:
+          'max(40px, env(safe-area-inset-top)) 16px max(40px, env(safe-area-inset-bottom))',
       }}
     >
       <div

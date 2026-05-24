@@ -7,7 +7,19 @@ import { floorLabelShort } from '@/lib/floors'
 import { moveBookingToRoomAndDates } from './actions'
 
 const DAY_WIDTH_PX = 36
-const ROW_LABEL_WIDTH_PX = 260
+// v44 — narrowed from 260 to give phone viewports a usable amount of
+// calendar space, and made `position: sticky; left: 0` so the room
+// name column stays in view while horizontally scrolling dates.
+// Mobile still sees the labels even after they scroll past in the
+// virtual canvas — no more "where am I" disorientation.
+const ROW_LABEL_WIDTH_PX = 170
+const STICKY_LABEL_STYLE: React.CSSProperties = {
+  width: ROW_LABEL_WIDTH_PX,
+  position: 'sticky',
+  left: 0,
+  zIndex: 2,
+  background: 'var(--color-paper, white)',
+}
 
 // Local copies of the date helpers so this client component doesn't pull
 // the server-only auth-using lib/dates.
@@ -310,7 +322,7 @@ export default function BookingsCalendar({
           >
             <div
               className="shrink-0 px-4 py-3 fg-section-label flex items-center"
-              style={{ width: ROW_LABEL_WIDTH_PX }}
+              style={STICKY_LABEL_STYLE}
             >
               Date →
             </div>
@@ -476,7 +488,7 @@ function Lane({
       className="flex border-b items-stretch"
       style={{ borderColor: 'var(--color-warm)' }}
     >
-      <div className="shrink-0 px-4 py-3" style={{ width: ROW_LABEL_WIDTH_PX }}>
+      <div className="shrink-0 px-4 py-3" style={STICKY_LABEL_STYLE}>
         <div
           className="text-sm"
           style={{
@@ -650,7 +662,7 @@ function RoomRow({
       className="flex border-b items-stretch"
       style={{ borderColor: 'var(--color-warm)' }}
     >
-      <div className="shrink-0 px-4 py-3" style={{ width: ROW_LABEL_WIDTH_PX }}>
+      <div className="shrink-0 px-4 py-3" style={STICKY_LABEL_STYLE}>
         <div
           className="text-sm flex items-center gap-2"
           style={{
@@ -823,10 +835,12 @@ function BookingBar({
   const dateStr = formatDateRange(booking.check_in, booking.check_out)
 
   // Single lane: keep the original 40px-tall bar at top:8.
-  // Two or more lanes: switch to compact 22px bars stacked from top:4.
+  // Two or more lanes: compact bars. v44: bumped from 22px to 30px so
+  // each is closer to the 44px iOS tap-target ideal — the row's own
+  // height grows to fit (see fg-room-row min-height in globals.css).
   const isCompact = laneCount > 1
-  const barTop = isCompact ? 4 + lane * (22 + 2) : 8
-  const barHeight = isCompact ? 22 : 40
+  const barTop = isCompact ? 4 + lane * (30 + 3) : 8
+  const barHeight = isCompact ? 30 : 40
 
   // Tap-vs-drag detection
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
