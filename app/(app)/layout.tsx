@@ -3,6 +3,7 @@ import { getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
 import { getActiveAnnouncementFor } from '@/lib/announcements'
+import { getUserPrefs } from '@/lib/user-prefs'
 import AnnouncementBanner from './AnnouncementBanner'
 import TopNav from './TopNav'
 
@@ -52,10 +53,11 @@ export default async function AuthedLayout({
     }
   }
 
-  // Feature flags + active announcement in parallel — both independent
-  const [featureFlags, announcement] = await Promise.all([
+  // Feature flags + active announcement + per-user prefs in parallel
+  const [featureFlags, announcement, userPrefs] = await Promise.all([
     getFeatureFlags(),
     getActiveAnnouncementFor(profile.id),
+    getUserPrefs(profile.id),
   ])
 
   // Larger-text mode: applied as a class on the shell so any styles
@@ -73,6 +75,7 @@ export default async function AuthedLayout({
         pendingCount={pendingCount}
         openIssueCount={openIssueCount}
         featureFlags={featureFlags}
+        userPrefs={userPrefs}
       />
       {announcement && (
         <AnnouncementBanner

@@ -1,7 +1,8 @@
 import { headers } from 'next/headers'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { updateProfile, updateAccessibilityMode } from './actions'
+import { getUserPrefs } from '@/lib/user-prefs'
+import { updateProfile, updateAccessibilityMode, updateFeaturePrefs } from './actions'
 import CalendarFeedSection from './CalendarFeedSection'
 import InstallSection from './InstallSection'
 import PushNotificationsSection from './PushNotificationsSection'
@@ -19,6 +20,8 @@ export default async function SettingsPage({
   ])
   const { saved, error } = sp
   const accMode = (profile as any).accessibility_mode ?? 'normal'
+  // v46: load per-user feature prefs so we can pre-check the toggles.
+  const prefs = await getUserPrefs(profile.id)
 
   // Look up the user's calendar token + build the absolute feed URL.
   // We read calendar_token here rather than caching it on the profile
@@ -201,6 +204,55 @@ export default async function SettingsPage({
         </div>
       </form>
 
+      {/* v46: feature toggles — hide tabs you don't care about. */}
+      <form action={updateFeaturePrefs} className="fg-card p-6 space-y-4 mt-6">
+        <h2 className="fg-section-label" style={{ marginBottom: 0 }}>
+          Features
+        </h2>
+        <p
+          className="text-xs fg-mono"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Show or hide optional tabs in the top nav. Doesn&rsquo;t affect
+          what other people see.
+        </p>
+        <FeatureToggle
+          name="show_expenses"
+          label="Expenses"
+          hint="House cost ledger (utilities, repairs, supplies)."
+          defaultChecked={prefs.show_expenses}
+        />
+        <FeatureToggle
+          name="show_contacts"
+          label="Contacts"
+          hint="Plumber, electrician, neighbour, GP."
+          defaultChecked={prefs.show_contacts}
+        />
+        <FeatureToggle
+          name="show_chat"
+          label="Chat"
+          hint="House message board — one general thread + per-booking threads."
+          defaultChecked={prefs.show_chat}
+        />
+        <FeatureToggle
+          name="show_wiki"
+          label="House info wiki"
+          hint="How-to guides (boiler, alarm, stopcock). Admin curates."
+          defaultChecked={prefs.show_wiki}
+        />
+        <FeatureToggle
+          name="email_notifications"
+          label="Email me notifications"
+          hint="Mirror push notifications to email — useful if you haven't installed the app on your phone. Opt-in."
+          defaultChecked={prefs.email_notifications}
+        />
+        <div className="pt-2">
+          <button type="submit" className="fg-btn-primary">
+            Save preferences
+          </button>
+        </div>
+      </form>
+
       <div className="mt-6">
         <CalendarFeedSection feedUrl={feedUrl} />
       </div>
@@ -213,5 +265,56 @@ export default async function SettingsPage({
         <PushNotificationsSection />
       </div>
     </div>
+  )
+}
+
+function FeatureToggle({
+  name,
+  label,
+  hint,
+  defaultChecked,
+}: {
+  name: string
+  label: string
+  hint: string
+  defaultChecked: boolean
+}) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 12,
+        padding: '10px 12px',
+        border: '1px solid var(--color-warm)',
+        borderRadius: 8,
+        cursor: 'pointer',
+      }}
+    >
+      <input
+        type="checkbox"
+        name={name}
+        value="1"
+        defaultChecked={defaultChecked}
+        style={{ marginTop: 4, transform: 'scale(1.2)' }}
+      />
+      <div>
+        <div
+          style={{
+            fontFamily: 'var(--font-serif)',
+            color: 'var(--color-ink)',
+            fontSize: 15,
+          }}
+        >
+          {label}
+        </div>
+        <div
+          className="text-xs fg-mono"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {hint}
+        </div>
+      </div>
+    </label>
   )
 }

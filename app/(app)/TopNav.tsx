@@ -11,16 +11,26 @@ import { usePathname } from 'next/navigation'
  *
  * Visual reference: OwnProperly's top-bar layout (logo | items | account).
  */
+type UserPrefs = {
+  show_expenses: boolean
+  show_contacts: boolean
+  show_chat: boolean
+  show_wiki: boolean
+  email_notifications: boolean
+}
+
 export default function TopNav({
   profile,
   pendingCount,
   openIssueCount,
   featureFlags,
+  userPrefs,
 }: {
   profile: { id: string; full_name: string; role: string }
   pendingCount: number
   openIssueCount: number
   featureFlags: Record<string, boolean>
+  userPrefs: UserPrefs
 }) {
   const pathname = usePathname() ?? ''
   const isAdmin = profile.role === 'admin'
@@ -85,6 +95,49 @@ export default function TopNav({
           } satisfies NavItem,
         ]
       : []),
+    // v46: opt-in feature tabs. Each is gated on the user's pref
+    // (which defaults to true) so people who never visit Settings
+    // still see them.
+    ...(userPrefs.show_contacts
+      ? [
+          {
+            href: '/contacts',
+            label: 'Contacts',
+            icon: '📒',
+            match: '/contacts',
+          } satisfies NavItem,
+        ]
+      : []),
+    ...(userPrefs.show_expenses
+      ? [
+          {
+            href: '/expenses',
+            label: 'Expenses',
+            icon: '💷',
+            match: '/expenses',
+          } satisfies NavItem,
+        ]
+      : []),
+    ...(userPrefs.show_chat
+      ? [
+          {
+            href: '/chat',
+            label: 'Chat',
+            icon: '💬',
+            match: '/chat',
+          } satisfies NavItem,
+        ]
+      : []),
+    ...(userPrefs.show_wiki
+      ? [
+          {
+            href: '/wiki',
+            label: 'How-to',
+            icon: '📖',
+            match: '/wiki',
+          } satisfies NavItem,
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
@@ -108,7 +161,7 @@ export default function TopNav({
                 {
                   href: '/pay',
                   label: 'Pay',
-                  icon: '💷',
+                  icon: '💰',
                   match: '/pay',
                 } satisfies NavItem,
               ]
