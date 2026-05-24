@@ -234,7 +234,33 @@ export default function BookingsCalendar({
     const target = e.currentTarget as HTMLElement
     try { target.releasePointerCapture(e.pointerId) } catch {}
 
-    const dropCell = hoverCell
+    // v44: bug — handlePointerUp was reading the stale `hoverCell`
+    // state. Under React's batching, the LAST handlePointerMove can
+    // setState a new hoverCell that hasn't flushed before pointerUp
+    // closes over its closure. Result: the dotted preview shows cell
+    // N (the last visible state) but the drop computes against cell
+    // N-1 (the previous state), or vice-versa — one square off.
+    //
+    // Fix: recompute the drop cell from the actual release coordinates,
+    // exactly the same way handlePointerMove does. This guarantees the
+    // drop matches what the dotted preview was showing.
+    const stack = document.elementsFromPoint(e.clientX, e.clientY)
+    let recomputedCell: { roomId: string; date: string } | null = null
+    for (const el of stack) {
+      if (
+        el instanceof HTMLElement &&
+        el.dataset.cell &&
+        el.dataset.roomId &&
+        el.dataset.date
+      ) {
+        recomputedCell = {
+          roomId: el.dataset.roomId,
+          date: el.dataset.date,
+        }
+        break
+      }
+    }
+    const dropCell = recomputedCell ?? hoverCell
     const d = drag
 
     // Reset visuals first
