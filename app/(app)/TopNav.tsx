@@ -231,14 +231,20 @@ export default function TopNav({
           {primary.map((item) => (
             <PrimaryLink key={item.href} item={item} pathname={pathname} />
           ))}
-          {hasMoreItems && (
-            <MoreMenu
-              sectionItems={sectionItems}
-              adminItems={adminItems}
-              pathname={pathname}
-            />
-          )}
         </nav>
+
+        {/* MoreMenu lives OUTSIDE .fg-topnav-items because that container
+            has overflow-x: auto (for narrow-phone horizontal scroll of
+            primary items), which would otherwise clip the absolute-
+            positioned dropdown panel. Keeping it as a sibling means
+            the dropdown can extend freely below the button. */}
+        {hasMoreItems && (
+          <MoreMenu
+            sectionItems={sectionItems}
+            adminItems={adminItems}
+            pathname={pathname}
+          />
+        )}
 
         <div className="fg-topnav-account">
           <span className="fg-topnav-name">{profile.full_name}</span>
