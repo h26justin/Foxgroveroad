@@ -416,6 +416,95 @@ button, a, label, input[type="checkbox"] {
   color: var(--color-ink);
 }
 
+/* Settings icon-button in the account area (v47 — moved out of primary nav) */
+.fg-topnav-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--color-muted);
+  font-size: 18px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.fg-topnav-settings:hover {
+  background: var(--color-card);
+  color: var(--color-ink);
+}
+
+/* =====================================================================
+   v47 — "More" dropdown in the primary nav
+   ===================================================================== */
+
+.fg-topnav-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.fg-topnav-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-warm);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  padding: 6px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* On very narrow screens, anchor the menu to the right edge of the
+     viewport rather than letting it overflow. */
+  max-width: calc(100vw - 16px);
+}
+
+.fg-topnav-more-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  padding: 8px 12px 4px 12px;
+}
+
+.fg-topnav-more-divider {
+  height: 1px;
+  background: var(--color-warm);
+  margin: 6px 6px;
+}
+
+.fg-topnav-more-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--color-ink);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 40px;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.fg-topnav-more-item:hover,
+.fg-topnav-more-item:focus-visible {
+  background: var(--color-card);
+}
+.fg-topnav-more-item.is-active {
+  background: rgba(168, 134, 46, 0.1);
+  color: var(--color-gold);
+  font-weight: 700;
+}
+
 /* =====================================================================
    v7 — Housekeeping room accordion
    ===================================================================== */
