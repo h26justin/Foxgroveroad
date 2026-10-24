@@ -2,7 +2,7 @@
 // Handles incoming push notifications and click-to-open behaviour.
 // This file lives at /public/sw.js so it has root scope.
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   // Take over immediately on first install instead of waiting for
   // existing tabs to close.
   self.skipWaiting()

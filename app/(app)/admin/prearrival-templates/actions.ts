@@ -28,7 +28,7 @@ export async function addTemplate(formData: FormData) {
     .limit(1)
     .maybeSingle()
 
-  const nextPosition = ((existing as any)?.position ?? 0) + 1
+  const nextPosition = (existing?.position ?? 0) + 1
 
   const { error } = await supabase.from('prearrival_templates').insert({
     room_id: roomId,

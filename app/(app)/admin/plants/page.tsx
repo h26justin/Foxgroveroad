@@ -28,8 +28,8 @@ export default async function AdminPlantsPage() {
       .limit(200),
   ])
 
-  const plants = ((plantsRes.data as any[]) ?? []) as Plant[]
-  const waterings = ((wateringsRes.data as any[]) ?? []) as PlantWatering[]
+  const plants = (plantsRes.data ?? []) as Plant[]
+  const waterings = (wateringsRes.data ?? []) as PlantWatering[]
   const annotated = annotatePlants(plants, waterings, today)
 
   return (

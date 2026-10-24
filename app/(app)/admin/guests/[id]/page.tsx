@@ -31,7 +31,7 @@ export default async function GuestDetailPage({
     .single()
 
   if (guestErr || !guestRow) notFound()
-  const guest = guestRow as any
+  const guest = guestRow
 
   // Stay history — two sources, merged & deduped:
   //   1. bookings.guest_id matches (the canonical link)
@@ -54,7 +54,7 @@ export default async function GuestDetailPage({
     .eq('guest_id', guest.id)
     .order('check_in', { ascending: false })
     .limit(50)
-  for (const b of (bedBookings as any[]) ?? []) {
+  for (const b of bedBookings ?? []) {
     stays.push({
       key: `bed:${b.id}`,
       check_in: b.check_in,
@@ -73,7 +73,7 @@ export default async function GuestDetailPage({
       .eq('requested_by', guest.linked_profile_id)
       .order('check_in', { ascending: false })
       .limit(50)
-    for (const r of (requests as any[]) ?? []) {
+    for (const r of requests ?? []) {
       stays.push({
         key: `req:${r.id}`,
         check_in: r.check_in,
@@ -119,11 +119,11 @@ export default async function GuestDetailPage({
     .select('linked_profile_id')
     .not('linked_profile_id', 'is', null)
   const linkedSet = new Set(
-    ((existingLinks as any[]) ?? [])
+    (existingLinks ?? [])
       .map((g) => g.linked_profile_id)
       .filter(Boolean),
   )
-  const linkableProfiles = ((allProfiles as any[]) ?? []).filter(
+  const linkableProfiles = (allProfiles ?? []).filter(
     (p) => !linkedSet.has(p.id),
   )
 
@@ -151,10 +151,10 @@ export default async function GuestDetailPage({
           general_notes: guest.general_notes ?? '',
           linked_profile: guest.profiles
             ? {
-                id: (guest.profiles as any).id,
-                full_name: (guest.profiles as any).full_name,
-                role: (guest.profiles as any).role,
-                phone: (guest.profiles as any).phone,
+                id: guest.profiles.id,
+                full_name: guest.profiles.full_name,
+                role: guest.profiles.role,
+                phone: guest.profiles.phone,
               }
             : null,
         }}

@@ -100,7 +100,7 @@ export default function UserActionsRow({
           className="text-xs fg-mono"
           style={{ color: 'var(--color-red)' }}
         >
-          Disable {fullName}'s account? They won't be able to sign in.
+          Disable {fullName}&apos;s account? They won&apos;t be able to sign in.
         </span>
         <button
           type="submit"
@@ -130,7 +130,7 @@ export default function UserActionsRow({
           className="text-xs fg-mono"
           style={{ color: 'var(--color-muted)' }}
         >
-          Re-enable {fullName}'s account?
+          Re-enable {fullName}&apos;s account?
         </span>
         <button type="submit" className="fg-btn-gold text-xs" style={btn}>
           Yes, enable

@@ -27,7 +27,7 @@ export async function createAnnouncement(formData: FormData) {
   // ones — only one banner at a time.
   await supabase
     .from('announcements')
-    .update({ is_active: false } as any)
+    .update({ is_active: false })
     .eq('is_active', true)
 
   const { data: inserted, error } = await supabase
@@ -37,7 +37,7 @@ export async function createAnnouncement(formData: FormData) {
       created_by: profile.id,
       dismissible,
       is_active: true,
-    } as any)
+    })
     .select('id')
     .single()
 
@@ -49,7 +49,7 @@ export async function createAnnouncement(formData: FormData) {
     actorId: profile.id,
     action: 'announcement.create',
     targetKind: 'announcement',
-    targetId: (inserted as any)?.id ?? null,
+    targetId: inserted?.id ?? null,
     payload: { body, dismissible },
   })
 
@@ -66,7 +66,7 @@ export async function deactivateAnnouncement(formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('announcements')
-    .update({ is_active: false } as any)
+    .update({ is_active: false })
     .eq('id', id)
 
   if (error) {
@@ -99,7 +99,7 @@ export async function dismissAnnouncement(announcementId: string) {
     .insert({
       announcement_id: announcementId,
       user_id: profile.id,
-    } as any)
+    })
 
   revalidatePath('/', 'layout')
 }

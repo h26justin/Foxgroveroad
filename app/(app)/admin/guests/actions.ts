@@ -100,8 +100,8 @@ export async function updateGuest(
     roomPref = readField('room_preference', 500)
     thingsBring = readField('things_they_bring', 500)
     general = readField('general_notes', 1000)
-  } catch (e: any) {
-    return { error: e?.message ?? 'Validation failed' }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Validation failed' }
   }
 
   const { error } = await supabase

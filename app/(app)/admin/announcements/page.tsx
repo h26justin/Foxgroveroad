@@ -23,7 +23,7 @@ export default async function AnnouncementsAdminPage({
     .order('created_at', { ascending: false })
     .limit(20)
 
-  const rows = (announcements as any[]) ?? []
+  const rows = announcements ?? []
   const active = rows.find((r) => r.is_active)
 
   return (

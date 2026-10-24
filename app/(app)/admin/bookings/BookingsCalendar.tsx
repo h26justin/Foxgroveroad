@@ -89,7 +89,6 @@ export default function BookingsCalendar({
   approvedUnassigned,
   bookingsByRoom,
   startISO,
-  currentMonthStart,
   onBookingTap,
   hideRequestLanes,
   roomStatuses,
@@ -635,8 +634,6 @@ function RoomRow({
   onPillPointerUp,
   onPillPointerCancel,
   draggingBookingId,
-  hoverCellRoomId,
-  hoverCellDate,
   dragPreview,
   onBookingTap,
 }: {

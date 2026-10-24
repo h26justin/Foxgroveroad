@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { formatDateRange } from '@/lib/dates'
@@ -50,7 +50,10 @@ export default async function AssignBedsPage({
     .lt('check_in', request.check_out)
     .gt('check_out', request.check_in)
 
-  const conflicts = new Map<string, any>()
+  const conflicts = new Map<
+    string,
+    NonNullable<typeof conflictingBookings>[number]
+  >()
   for (const b of conflictingBookings ?? []) {
     if (!b.bed_id) continue
     if (!conflicts.has(b.bed_id)) conflicts.set(b.bed_id, b)
@@ -63,7 +66,7 @@ export default async function AssignBedsPage({
     .filter(Boolean) as string[]
 
   const requesterName =
-    (request.profiles as any)?.full_name ?? 'Unknown'
+    request.profiles?.full_name ?? 'Unknown'
   const totalGuests = request.adults + request.children
 
   return (
@@ -203,7 +206,7 @@ export default async function AssignBedsPage({
                               style={{ color: 'var(--color-red)' }}
                             >
                               taken by{' '}
-                              {(conflict.profiles as any)?.full_name ??
+                              {conflict.profiles?.full_name ??
                                 conflict.guest_name}{' '}
                               ({formatDateRange(
                                 conflict.check_in,

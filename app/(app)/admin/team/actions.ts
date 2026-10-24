@@ -7,10 +7,18 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createAdminPublicClient } from '@/lib/supabase/admin-public'
 import { requireAdmin } from '@/lib/auth'
 import { logAdminAction } from '@/lib/audit'
+import type { Enums } from '@/lib/supabase/database.types'
 
 // =====================================================================
 // Helpers
 // =====================================================================
+
+/** Roles an admin can assign (everything except the 'pending' gate). */
+function isAssignableRole(
+  role: string,
+): role is Exclude<Enums<'user_role'>, 'pending'> {
+  return ['admin', 'family', 'cleaner'].includes(role)
+}
 
 /**
  * Best-effort site-URL for redirects in emails.
@@ -57,7 +65,7 @@ export async function setUserRole(formData: FormData) {
   const profileId = String(formData.get('profile_id') ?? '')
   const role = String(formData.get('role') ?? '')
 
-  if (!profileId || !['admin', 'family', 'cleaner'].includes(role)) {
+  if (!profileId || !isAssignableRole(role)) {
     redirect(`/admin/team?error=${encodeURIComponent('Invalid role')}`)
   }
 
@@ -245,9 +253,7 @@ export async function toggleUserBanned(formData: FormData) {
   }
 
   const admin = createAdminClient()
-  // Cast to any — Supabase JS types for ban_duration are slightly
-  // out-of-date in some versions.
-  const { error } = await (admin.auth.admin as any).updateUserById(
+  const { error } = await admin.auth.admin.updateUserById(
     profileId,
     {
       ban_duration: shouldBan ? '876000h' : 'none', // ~100 years or unban
@@ -324,7 +330,7 @@ export async function deleteUser(formData: FormData) {
     )
   }
 
-  const realName = (profile as any).full_name as string
+  const realName = profile.full_name
   // Name match is case-insensitive and trim-tolerant. Has to match
   // exactly otherwise — partial matches would defeat the safety.
   if (confirmName.toLowerCase() !== realName.toLowerCase()) {
@@ -340,7 +346,7 @@ export async function deleteUser(formData: FormData) {
   // Supabase doesn't try to send a confirmation message (which would
   // bounce off the .invalid TLD anyway).
   const rotatedEmail = `deleted+${profileId}@deleted.foxgrove.invalid`
-  const { error: authErr } = await (admin.auth.admin as any).updateUserById(
+  const { error: authErr } = await admin.auth.admin.updateUserById(
     profileId,
     {
       ban_duration: '876000h',
@@ -361,7 +367,7 @@ export async function deleteUser(formData: FormData) {
       full_name: 'Deleted user',
       phone: null,
       is_deleted: true,
-    } as any)
+    })
     .eq('id', profileId)
   if (profileErr) {
     redirect(`/admin/team?error=${encodeURIComponent(profileErr.message)}`)
@@ -405,7 +411,7 @@ export async function updateUserEmail(formData: FormData) {
   }
 
   const admin = createAdminClient()
-  const { error } = await (admin.auth.admin as any).updateUserById(profileId, {
+  const { error } = await admin.auth.admin.updateUserById(profileId, {
     email: newEmail,
     email_confirm: true,
   })
@@ -447,7 +453,7 @@ export async function approvePendingUser(formData: FormData) {
   if (!profileId) {
     redirect(`/admin/team?error=${encodeURIComponent('Missing profile')}`)
   }
-  if (!['admin', 'family', 'cleaner'].includes(newRole)) {
+  if (!isAssignableRole(newRole)) {
     redirect(
       `/admin/team?error=${encodeURIComponent('Role must be admin, family, or cleaner')}`,
     )
@@ -456,7 +462,7 @@ export async function approvePendingUser(formData: FormData) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('profiles')
-    .update({ role: newRole } as any)
+    .update({ role: newRole })
     .eq('id', profileId)
     .eq('role', 'pending')
   if (error) {

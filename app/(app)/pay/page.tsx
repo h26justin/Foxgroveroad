@@ -42,7 +42,7 @@ export default async function PayPage() {
   ])
 
   const rates = ratesRes.data ?? null
-  const weeks = (weeksRes.data as any[]) ?? []
+  const weeks = weeksRes.data ?? []
 
   // v41: pull this week's self-logged hours so admin can see what
   // cleaners reported before typing the weekly totals.

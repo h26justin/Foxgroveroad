@@ -43,7 +43,7 @@ export default async function HouseInfoPage({
     .from('house_settings')
     .select('key, value')
 
-  const settings = asSettingsMap((rows as any[]) ?? [])
+  const settings = asSettingsMap(rows ?? [])
 
   return (
     <div className="max-w-2xl">
