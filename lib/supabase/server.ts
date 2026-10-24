@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import type { Database } from './database.types'
 
 /**
  * Wrapped in React's `cache()` so a single request reuses one Supabase
@@ -14,7 +15,7 @@ import { cookies } from 'next/headers'
 export const createClient = cache(async () => {
   const cookieStore = await cookies()
 
-  return createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

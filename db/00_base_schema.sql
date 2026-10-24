@@ -14,6 +14,8 @@
 -- =============================================================================
 
 create extension if not exists pgcrypto;
+-- Functions are listed alphabetically, not in dependency order.
+set check_function_bodies = off;
 
 -- ─── ENUMS ─────────────────────────────────────────────────────────────────
 
@@ -37,7 +39,6 @@ create table public.admin_audit (
   created_at timestamp with time zone default now() not null
 );
 alter table public.admin_audit add constraint admin_audit_pkey PRIMARY KEY (id);
-alter table public.admin_audit add constraint admin_audit_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES profiles(id) ON DELETE SET NULL;
 CREATE INDEX admin_audit_actor_idx ON public.admin_audit USING btree (actor_id, created_at DESC);
 CREATE INDEX admin_audit_created_idx ON public.admin_audit USING btree (created_at DESC);
 CREATE INDEX admin_audit_target_idx ON public.admin_audit USING btree (target_kind, target_id);
@@ -49,8 +50,6 @@ create table public.announcement_dismissals (
   dismissed_at timestamp with time zone default now() not null
 );
 alter table public.announcement_dismissals add constraint announcement_dismissals_pkey PRIMARY KEY (announcement_id, user_id);
-alter table public.announcement_dismissals add constraint announcement_dismissals_announcement_id_fkey FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE;
-alter table public.announcement_dismissals add constraint announcement_dismissals_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
 alter table public.announcement_dismissals enable row level security;
 
 create table public.announcements (
@@ -62,7 +61,6 @@ create table public.announcements (
   dismissible boolean default true not null
 );
 alter table public.announcements add constraint announcements_pkey PRIMARY KEY (id);
-alter table public.announcements add constraint announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE CASCADE;
 alter table public.announcements add constraint announcements_body_check CHECK (((length(body) > 0) AND (length(body) <= 500)));
 CREATE INDEX announcements_active_idx ON public.announcements USING btree (created_at DESC) WHERE (is_active = true);
 alter table public.announcements enable row level security;
@@ -79,7 +77,6 @@ create table public.attachments (
   caption text
 );
 alter table public.attachments add constraint attachments_pkey PRIMARY KEY (id);
-alter table public.attachments add constraint attachments_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.attachments add constraint attachments_caption_check CHECK ((char_length(caption) <= 500));
 alter table public.attachments add constraint attachments_kind_check CHECK ((kind = ANY (ARRAY['issue'::text, 'prearrival_check'::text, 'booking'::text, 'damage'::text, 'general'::text, 'room'::text])));
 alter table public.attachments add constraint attachments_size_bytes_check CHECK (((size_bytes > 0) AND (size_bytes <= ((10 * 1024) * 1024))));
@@ -101,7 +98,6 @@ create table public.beds (
   created_at timestamp with time zone default now() not null
 );
 alter table public.beds add constraint beds_pkey PRIMARY KEY (id);
-alter table public.beds add constraint beds_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
 alter table public.beds enable row level security;
 
 create table public.bin_calendar_cache (
@@ -124,7 +120,6 @@ create table public.booking_request_children (
   created_at timestamp with time zone default now() not null
 );
 alter table public.booking_request_children add constraint booking_request_children_pkey PRIMARY KEY (id);
-alter table public.booking_request_children add constraint booking_request_children_request_id_fkey FOREIGN KEY (request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
 alter table public.booking_request_children add constraint booking_request_children_age_band_check CHECK ((age_band = ANY (ARRAY['infant'::text, 'toddler'::text, 'child'::text])));
 alter table public.booking_request_children add constraint booking_request_children_sleep_arrangement_check CHECK ((sleep_arrangement = ANY (ARRAY['cot'::text, 'own_bed'::text, 'sharing_with_parent'::text])));
 alter table public.booking_request_children add constraint chk_arrangement_for_age CHECK ((((age_band = 'infant'::text) AND (sleep_arrangement = 'cot'::text)) OR ((age_band = 'toddler'::text) AND (sleep_arrangement = ANY (ARRAY['cot'::text, 'own_bed'::text]))) OR ((age_band = 'child'::text) AND (sleep_arrangement = ANY (ARRAY['own_bed'::text, 'sharing_with_parent'::text])))));
@@ -140,8 +135,6 @@ create table public.booking_request_guests (
 );
 alter table public.booking_request_guests add constraint booking_request_guests_unique UNIQUE (request_id, guest_id);
 alter table public.booking_request_guests add constraint booking_request_guests_pkey PRIMARY KEY (id);
-alter table public.booking_request_guests add constraint booking_request_guests_guest_id_fkey FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE CASCADE;
-alter table public.booking_request_guests add constraint booking_request_guests_request_id_fkey FOREIGN KEY (request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
 CREATE INDEX idx_brg_request ON public.booking_request_guests USING btree (request_id);
 CREATE INDEX idx_brg_guest ON public.booking_request_guests USING btree (guest_id);
 alter table public.booking_request_guests enable row level security;
@@ -163,8 +156,6 @@ create table public.booking_requests (
   arrival_token text
 );
 alter table public.booking_requests add constraint booking_requests_pkey PRIMARY KEY (id);
-alter table public.booking_requests add constraint booking_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES profiles(id);
-alter table public.booking_requests add constraint booking_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES profiles(id) ON DELETE CASCADE;
 alter table public.booking_requests add constraint booking_requests_adults_check CHECK ((adults >= 1));
 alter table public.booking_requests add constraint booking_requests_children_check CHECK ((children >= 0));
 alter table public.booking_requests add constraint check_request_dates CHECK ((check_out > check_in));
@@ -190,11 +181,6 @@ create table public.bookings (
   guest_id uuid
 );
 alter table public.bookings add constraint bookings_pkey PRIMARY KEY (id);
-alter table public.bookings add constraint bookings_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES profiles(id);
-alter table public.bookings add constraint bookings_bed_id_fkey FOREIGN KEY (bed_id) REFERENCES beds(id) ON DELETE SET NULL;
-alter table public.bookings add constraint bookings_guest_id_fkey FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE SET NULL;
-alter table public.bookings add constraint bookings_request_id_fkey FOREIGN KEY (request_id) REFERENCES booking_requests(id) ON DELETE SET NULL;
-alter table public.bookings add constraint bookings_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.bookings add constraint check_dates CHECK ((check_out > check_in));
 CREATE INDEX idx_bookings_dates ON public.bookings USING btree (check_in, check_out);
 CREATE INDEX bookings_status_dates_idx ON public.bookings USING btree (status, check_in, check_out);
@@ -215,8 +201,6 @@ create table public.cleaner_hour_logs (
   logged_at timestamp with time zone default now() not null
 );
 alter table public.cleaner_hour_logs add constraint cleaner_hour_logs_pkey PRIMARY KEY (id);
-alter table public.cleaner_hour_logs add constraint cleaner_hour_logs_cleaner_id_fkey FOREIGN KEY (cleaner_id) REFERENCES cleaners(id) ON DELETE CASCADE;
-alter table public.cleaner_hour_logs add constraint cleaner_hour_logs_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.cleaner_hour_logs add constraint cleaner_hour_logs_hours_check CHECK (((hours > (0)::numeric) AND (hours <= (24)::numeric)));
 CREATE INDEX cleaner_hour_logs_cleaner_date_idx ON public.cleaner_hour_logs USING btree (cleaner_id, date);
 CREATE INDEX cleaner_hour_logs_date_idx ON public.cleaner_hour_logs USING btree (date DESC);
@@ -237,7 +221,6 @@ create table public.cleaner_hours (
 );
 alter table public.cleaner_hours add constraint cleaner_hours_unique_week UNIQUE (week_start_date);
 alter table public.cleaner_hours add constraint cleaner_hours_pkey PRIMARY KEY (id);
-alter table public.cleaner_hours add constraint cleaner_hours_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.cleaner_hours add constraint cleaner_hours_linda_hours_check CHECK (((linda_hours >= (0)::numeric) AND (linda_hours <= (168)::numeric)));
 alter table public.cleaner_hours add constraint cleaner_hours_must_be_monday CHECK ((EXTRACT(isodow FROM week_start_date) = (1)::numeric));
 alter table public.cleaner_hours add constraint cleaner_hours_notes_check CHECK ((char_length(notes) <= 1000));
@@ -254,7 +237,6 @@ create table public.cleaner_pay_rates (
   updated_by uuid
 );
 alter table public.cleaner_pay_rates add constraint cleaner_pay_rates_pkey PRIMARY KEY (id);
-alter table public.cleaner_pay_rates add constraint cleaner_pay_rates_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.cleaner_pay_rates add constraint cleaner_pay_rates_id_check CHECK ((id = 'singleton'::text));
 alter table public.cleaner_pay_rates enable row level security;
 
@@ -269,7 +251,6 @@ create table public.cleaner_shifts (
 );
 alter table public.cleaner_shifts add constraint cleaner_shifts_cleaner_id_shift_date_key UNIQUE (cleaner_id, shift_date);
 alter table public.cleaner_shifts add constraint cleaner_shifts_pkey PRIMARY KEY (id);
-alter table public.cleaner_shifts add constraint cleaner_shifts_cleaner_id_fkey FOREIGN KEY (cleaner_id) REFERENCES profiles(id) ON DELETE CASCADE;
 CREATE INDEX idx_shifts_date ON public.cleaner_shifts USING btree (shift_date);
 alter table public.cleaner_shifts enable row level security;
 
@@ -282,7 +263,6 @@ create table public.cleaners (
 );
 alter table public.cleaners add constraint cleaners_name_key UNIQUE (name);
 alter table public.cleaners add constraint cleaners_pkey PRIMARY KEY (id);
-alter table public.cleaners add constraint cleaners_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES profiles(id);
 alter table public.cleaners enable row level security;
 
 create table public.contacts (
@@ -298,7 +278,6 @@ create table public.contacts (
   updated_at timestamp with time zone default now() not null
 );
 alter table public.contacts add constraint contacts_pkey PRIMARY KEY (id);
-alter table public.contacts add constraint contacts_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.contacts add constraint contacts_kind_check CHECK ((kind = ANY (ARRAY['plumber'::text, 'electrician'::text, 'locksmith'::text, 'neighbour'::text, 'gp'::text, 'cleaner'::text, 'gardener'::text, 'handyman'::text, 'other'::text])));
 alter table public.contacts add constraint contacts_name_check CHECK (((length(name) > 0) AND (length(name) <= 200)));
 CREATE INDEX contacts_pinned_kind_idx ON public.contacts USING btree (is_pinned DESC, kind, name);
@@ -317,9 +296,6 @@ create table public.expenses (
   created_at timestamp with time zone default now() not null
 );
 alter table public.expenses add constraint expenses_pkey PRIMARY KEY (id);
-alter table public.expenses add constraint expenses_booking_request_id_fkey FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE SET NULL;
-alter table public.expenses add constraint expenses_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.expenses add constraint expenses_paid_by_fkey FOREIGN KEY (paid_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.expenses add constraint expenses_amount_pence_check CHECK ((amount_pence >= 0));
 alter table public.expenses add constraint expenses_category_check CHECK ((category = ANY (ARRAY['utilities'::text, 'repairs'::text, 'supplies'::text, 'council_tax'::text, 'insurance'::text, 'cleaning_supply'::text, 'other'::text])));
 alter table public.expenses add constraint expenses_currency_check CHECK ((length(currency) = 3));
@@ -336,7 +312,6 @@ create table public.feature_flags (
   updated_by uuid
 );
 alter table public.feature_flags add constraint feature_flags_pkey PRIMARY KEY (name);
-alter table public.feature_flags add constraint feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.feature_flags enable row level security;
 
 create table public.guests (
@@ -354,8 +329,6 @@ create table public.guests (
 );
 alter table public.guests add constraint guests_linked_profile_id_key UNIQUE (linked_profile_id);
 alter table public.guests add constraint guests_pkey PRIMARY KEY (id);
-alter table public.guests add constraint guests_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.guests add constraint guests_linked_profile_id_fkey FOREIGN KEY (linked_profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.guests add constraint guests_allergies_check CHECK ((char_length(allergies) <= 500));
 alter table public.guests add constraint guests_dietary_notes_check CHECK ((char_length(dietary_notes) <= 500));
 alter table public.guests add constraint guests_full_name_check CHECK (((char_length(full_name) >= 1) AND (char_length(full_name) <= 200)));
@@ -373,7 +346,6 @@ create table public.house_settings (
   updated_by uuid
 );
 alter table public.house_settings add constraint house_settings_pkey PRIMARY KEY (key);
-alter table public.house_settings add constraint house_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.house_settings enable row level security;
 
 create table public.issues (
@@ -388,9 +360,6 @@ create table public.issues (
   resolution_note text
 );
 alter table public.issues add constraint issues_pkey PRIMARY KEY (id);
-alter table public.issues add constraint issues_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.issues add constraint issues_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.issues add constraint issues_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL;
 alter table public.issues add constraint issues_description_check CHECK (((char_length(description) >= 1) AND (char_length(description) <= 2000)));
 alter table public.issues add constraint issues_resolution_note_check CHECK ((char_length(resolution_note) <= 2000));
 alter table public.issues add constraint issues_status_check CHECK ((status = ANY (ARRAY['open'::text, 'resolved'::text])));
@@ -426,9 +395,6 @@ create table public.linen_movements (
   created_at timestamp with time zone default now() not null
 );
 alter table public.linen_movements add constraint linen_movements_pkey PRIMARY KEY (id);
-alter table public.linen_movements add constraint linen_movements_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id);
-alter table public.linen_movements add constraint linen_movements_item_id_fkey FOREIGN KEY (item_id) REFERENCES linen_items(id) ON DELETE CASCADE;
-alter table public.linen_movements add constraint linen_movements_task_id_fkey FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL;
 alter table public.linen_movements enable row level security;
 
 create table public.messages (
@@ -441,8 +407,6 @@ create table public.messages (
   deleted_at timestamp with time zone
 );
 alter table public.messages add constraint messages_pkey PRIMARY KEY (id);
-alter table public.messages add constraint messages_author_id_fkey FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE CASCADE;
-alter table public.messages add constraint messages_booking_request_id_fkey FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
 alter table public.messages add constraint messages_body_check CHECK (((length(body) > 0) AND (length(body) <= 2000)));
 alter table public.messages add constraint messages_scope_check CHECK ((scope = ANY (ARRAY['general'::text, 'booking'::text])));
 alter table public.messages add constraint scope_booking_consistency CHECK ((((scope = 'general'::text) AND (booking_request_id IS NULL)) OR ((scope = 'booking'::text) AND (booking_request_id IS NOT NULL))));
@@ -462,9 +426,6 @@ create table public.oneshot_tasks (
   completed_by uuid
 );
 alter table public.oneshot_tasks add constraint oneshot_tasks_pkey PRIMARY KEY (id);
-alter table public.oneshot_tasks add constraint oneshot_tasks_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.oneshot_tasks add constraint oneshot_tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE RESTRICT;
-alter table public.oneshot_tasks add constraint oneshot_tasks_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL;
 alter table public.oneshot_tasks add constraint oneshot_tasks_description_check CHECK (((char_length(description) >= 1) AND (char_length(description) <= 2000)));
 alter table public.oneshot_tasks add constraint oneshot_tasks_priority_check CHECK ((priority = ANY (ARRAY['normal'::text, 'urgent'::text])));
 alter table public.oneshot_tasks add constraint oneshot_tasks_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'completed'::text, 'archived'::text])));
@@ -481,8 +442,6 @@ create table public.plant_waterings (
   watered_at_date date default CURRENT_DATE not null
 );
 alter table public.plant_waterings add constraint plant_waterings_pkey PRIMARY KEY (id);
-alter table public.plant_waterings add constraint plant_waterings_plant_id_fkey FOREIGN KEY (plant_id) REFERENCES plants(id) ON DELETE CASCADE;
-alter table public.plant_waterings add constraint plant_waterings_watered_by_fkey FOREIGN KEY (watered_by) REFERENCES profiles(id) ON DELETE SET NULL;
 CREATE INDEX plant_waterings_date_idx ON public.plant_waterings USING btree (watered_at_date DESC);
 CREATE INDEX plant_waterings_plant_id_idx ON public.plant_waterings USING btree (plant_id);
 alter table public.plant_waterings enable row level security;
@@ -511,10 +470,6 @@ create table public.prearrival_checks (
 );
 alter table public.prearrival_checks add constraint prearrival_checks_booking_request_id_template_id_key UNIQUE (booking_request_id, template_id);
 alter table public.prearrival_checks add constraint prearrival_checks_pkey PRIMARY KEY (id);
-alter table public.prearrival_checks add constraint prearrival_checks_booking_request_id_fkey FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
-alter table public.prearrival_checks add constraint prearrival_checks_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.prearrival_checks add constraint prearrival_checks_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
-alter table public.prearrival_checks add constraint prearrival_checks_template_id_fkey FOREIGN KEY (template_id) REFERENCES prearrival_templates(id) ON DELETE CASCADE;
 CREATE INDEX idx_prearrival_checks_booking ON public.prearrival_checks USING btree (booking_request_id);
 alter table public.prearrival_checks enable row level security;
 
@@ -527,7 +482,6 @@ create table public.prearrival_templates (
 );
 alter table public.prearrival_templates add constraint prearrival_templates_room_id_name_key UNIQUE (room_id, name);
 alter table public.prearrival_templates add constraint prearrival_templates_pkey PRIMARY KEY (id);
-alter table public.prearrival_templates add constraint prearrival_templates_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
 CREATE INDEX idx_prearrival_templates_room ON public.prearrival_templates USING btree (room_id, "position");
 alter table public.prearrival_templates enable row level security;
 
@@ -543,7 +497,6 @@ create table public.profiles (
   calendar_token text
 );
 alter table public.profiles add constraint profiles_pkey PRIMARY KEY (id);
-alter table public.profiles add constraint profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.profiles add constraint profiles_accessibility_mode_check CHECK ((accessibility_mode = ANY (ARRAY['normal'::text, 'large'::text])));
 CREATE INDEX profiles_active_idx ON public.profiles USING btree (created_at) WHERE (is_deleted = false);
 CREATE UNIQUE INDEX profiles_calendar_token_uniq ON public.profiles USING btree (calendar_token) WHERE (calendar_token IS NOT NULL);
@@ -560,7 +513,6 @@ create table public.push_subscriptions (
 );
 alter table public.push_subscriptions add constraint push_subscriptions_endpoint_key UNIQUE (endpoint);
 alter table public.push_subscriptions add constraint push_subscriptions_pkey PRIMARY KEY (id);
-alter table public.push_subscriptions add constraint push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
 CREATE INDEX idx_push_user ON public.push_subscriptions USING btree (user_id);
 alter table public.push_subscriptions enable row level security;
 
@@ -578,8 +530,6 @@ create table public.room_linen (
   updated_by uuid
 );
 alter table public.room_linen add constraint room_linen_pkey PRIMARY KEY (id);
-alter table public.room_linen add constraint room_linen_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
-alter table public.room_linen add constraint room_linen_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.room_linen add constraint room_linen_clean_count_check CHECK ((clean_count >= 0));
 alter table public.room_linen add constraint room_linen_dirty_count_check CHECK ((dirty_count >= 0));
 alter table public.room_linen add constraint room_linen_expected_count_check CHECK ((expected_count >= 0));
@@ -609,7 +559,6 @@ create table public.rooms (
 );
 alter table public.rooms add constraint rooms_name_unique UNIQUE (name);
 alter table public.rooms add constraint rooms_pkey PRIMARY KEY (id);
-alter table public.rooms add constraint rooms_linked_bedroom_id_fkey FOREIGN KEY (linked_bedroom_id) REFERENCES rooms(id) ON DELETE SET NULL;
 CREATE INDEX idx_rooms_linked_bedroom ON public.rooms USING btree (linked_bedroom_id) WHERE (linked_bedroom_id IS NOT NULL);
 alter table public.rooms enable row level security;
 
@@ -622,8 +571,6 @@ create table public.task_completions (
   notes text
 );
 alter table public.task_completions add constraint task_completions_pkey PRIMARY KEY (id);
-alter table public.task_completions add constraint task_completions_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.task_completions add constraint task_completions_task_template_id_fkey FOREIGN KEY (task_template_id) REFERENCES task_templates(id) ON DELETE CASCADE;
 CREATE INDEX idx_task_completions_completed_at ON public.task_completions USING btree (completed_at DESC);
 CREATE INDEX idx_task_completions_template_completed ON public.task_completions USING btree (task_template_id, completed_at_date DESC);
 alter table public.task_completions enable row level security;
@@ -643,7 +590,6 @@ create table public.task_templates (
   task_kind text default 'recurring'::text not null
 );
 alter table public.task_templates add constraint task_templates_pkey PRIMARY KEY (id);
-alter table public.task_templates add constraint task_templates_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
 alter table public.task_templates add constraint chk_task_kind CHECK ((task_kind = ANY (ARRAY['turnover'::text, 'recurring'::text, 'occupied_only'::text])));
 alter table public.task_templates enable row level security;
 
@@ -665,10 +611,6 @@ create table public.tasks (
   created_at timestamp with time zone default now() not null
 );
 alter table public.tasks add constraint tasks_pkey PRIMARY KEY (id);
-alter table public.tasks add constraint tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.tasks add constraint tasks_related_booking_id_fkey FOREIGN KEY (related_booking_id) REFERENCES bookings(id) ON DELETE SET NULL;
-alter table public.tasks add constraint tasks_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL;
-alter table public.tasks add constraint tasks_template_id_fkey FOREIGN KEY (template_id) REFERENCES task_templates(id) ON DELETE SET NULL;
 CREATE INDEX idx_tasks_due ON public.tasks USING btree (due_date, status);
 CREATE INDEX idx_tasks_assigned ON public.tasks USING btree (assigned_to, due_date);
 alter table public.tasks enable row level security;
@@ -683,7 +625,6 @@ create table public.user_feature_prefs (
   updated_at timestamp with time zone default now() not null
 );
 alter table public.user_feature_prefs add constraint user_feature_prefs_pkey PRIMARY KEY (user_id);
-alter table public.user_feature_prefs add constraint user_feature_prefs_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
 alter table public.user_feature_prefs enable row level security;
 
 create table public.user_room_order (
@@ -695,8 +636,6 @@ create table public.user_room_order (
 );
 alter table public.user_room_order add constraint user_room_order_user_id_room_id_key UNIQUE (user_id, room_id);
 alter table public.user_room_order add constraint user_room_order_pkey PRIMARY KEY (id);
-alter table public.user_room_order add constraint user_room_order_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
-alter table public.user_room_order add constraint user_room_order_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
 CREATE INDEX idx_user_room_order_user ON public.user_room_order USING btree (user_id, "position");
 alter table public.user_room_order enable row level security;
 
@@ -713,102 +652,78 @@ create table public.wiki_pages (
 );
 alter table public.wiki_pages add constraint wiki_pages_slug_key UNIQUE (slug);
 alter table public.wiki_pages add constraint wiki_pages_pkey PRIMARY KEY (id);
-alter table public.wiki_pages add constraint wiki_pages_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
-alter table public.wiki_pages add constraint wiki_pages_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 alter table public.wiki_pages add constraint wiki_pages_slug_check CHECK (((slug ~ '^[a-z0-9-]+$'::text) AND (length(slug) > 0) AND (length(slug) <= 100)));
 alter table public.wiki_pages add constraint wiki_pages_title_check CHECK (((length(title) > 0) AND (length(title) <= 200)));
 CREATE INDEX wiki_pages_pinned_idx ON public.wiki_pages USING btree (is_pinned DESC, title);
 alter table public.wiki_pages enable row level security;
 
--- ─── VIEWS ─────────────────────────────────────────────────────────────────
+-- ─── FOREIGN KEYS ──────────────────────────────────────────────────────────
 
-create view public.cleaner_tasks_today as
- WITH last_done AS (
-         SELECT task_completions.task_template_id,
-            max(task_completions.completed_at_date) AS last_completed_date,
-            max(task_completions.completed_at) AS last_completed_at
-           FROM task_completions
-          GROUP BY task_completions.task_template_id
-        ), effective_checkout_per_room AS (
-         SELECT r_1.id AS room_id,
-            GREATEST(COALESCE(( SELECT (max(b.check_out))::timestamp with time zone AS max
-                   FROM (bookings b
-                     JOIN beds bd ON ((bd.id = b.bed_id)))
-                  WHERE ((bd.room_id =
-                        CASE
-                            WHEN ((r_1.room_type = 'bathroom'::text) AND (r_1.linked_bedroom_id IS NOT NULL)) THEN r_1.linked_bedroom_id
-                            ELSE r_1.id
-                        END) AND (b.status = 'approved'::booking_status) AND (b.check_out <= CURRENT_DATE))), '1970-01-01 00:00:00+00'::timestamp with time zone), COALESCE(r_1.manual_turnover_at, '1970-01-01 00:00:00+00'::timestamp with time zone), COALESCE(( SELECT r2.manual_turnover_at
-                   FROM rooms r2
-                  WHERE ((r_1.room_type = 'bathroom'::text) AND (r_1.linked_bedroom_id IS NOT NULL) AND (r2.id = r_1.linked_bedroom_id))), '1970-01-01 00:00:00+00'::timestamp with time zone)) AS last_checkout_at
-           FROM rooms r_1
-        )
- SELECT tt.id,
-    tt.name,
-    tt.notes,
-    tt.frequency_days,
-    tt.is_turnaround,
-    tt.task_kind,
-    tt.room_id,
-    r.name AS room_name,
-    r.floor,
-    r.room_type,
-    ld.last_completed_date,
-    ld.last_completed_at,
-    fg_room_state(r.id) AS room_state,
-        CASE
-            WHEN (tt.task_kind = 'turnover'::text) THEN NULL::date
-            WHEN (tt.frequency_days IS NULL) THEN NULL::date
-            WHEN (ld.last_completed_date IS NULL) THEN NULL::date
-            ELSE (ld.last_completed_date + tt.frequency_days)
-        END AS next_due_date,
-        CASE
-            WHEN (tt.task_kind = 'turnover'::text) THEN
-            CASE
-                WHEN (ec.last_checkout_at <= '1970-01-01 00:00:00+00'::timestamp with time zone) THEN 'no_schedule'::text
-                WHEN ((ld.last_completed_at IS NULL) OR (ld.last_completed_at < ec.last_checkout_at)) THEN 'overdue'::text
-                ELSE 'scheduled'::text
-            END
-            WHEN (tt.task_kind = 'occupied_only'::text) THEN
-            CASE
-                WHEN (fg_room_state(r.id) <> 'occupied'::text) THEN 'scheduled'::text
-                WHEN (tt.frequency_days IS NULL) THEN 'no_schedule'::text
-                WHEN (ld.last_completed_date IS NULL) THEN 'overdue'::text
-                WHEN ((ld.last_completed_date + tt.frequency_days) <= CURRENT_DATE) THEN
-                CASE
-                    WHEN ((ld.last_completed_date + tt.frequency_days) = CURRENT_DATE) THEN 'due'::text
-                    ELSE 'overdue'::text
-                END
-                ELSE 'scheduled'::text
-            END
-            ELSE
-            CASE
-                WHEN (tt.frequency_days IS NULL) THEN 'no_schedule'::text
-                WHEN (ld.last_completed_date IS NULL) THEN 'overdue'::text
-                WHEN ((ld.last_completed_date + tt.frequency_days) <= CURRENT_DATE) THEN
-                CASE
-                    WHEN ((ld.last_completed_date + tt.frequency_days) = CURRENT_DATE) THEN 'due'::text
-                    ELSE 'overdue'::text
-                END
-                ELSE 'scheduled'::text
-            END
-        END AS status,
-        CASE
-            WHEN (tt.task_kind = 'turnover'::text) THEN
-            CASE
-                WHEN (ec.last_checkout_at <= '1970-01-01 00:00:00+00'::timestamp with time zone) THEN NULL::integer
-                WHEN ((ld.last_completed_at IS NULL) OR (ld.last_completed_at < ec.last_checkout_at)) THEN (CURRENT_DATE - (ec.last_checkout_at)::date)
-                ELSE NULL::integer
-            END
-            WHEN ((tt.task_kind = 'occupied_only'::text) AND (fg_room_state(r.id) <> 'occupied'::text)) THEN NULL::integer
-            WHEN (tt.frequency_days IS NULL) THEN NULL::integer
-            WHEN (ld.last_completed_date IS NULL) THEN 999
-            ELSE (CURRENT_DATE - (ld.last_completed_date + tt.frequency_days))
-        END AS days_overdue
-   FROM (((task_templates tt
-     JOIN rooms r ON ((r.id = tt.room_id)))
-     LEFT JOIN last_done ld ON ((ld.task_template_id = tt.id)))
-     LEFT JOIN effective_checkout_per_room ec ON ((ec.room_id = r.id)));
+alter table public.admin_audit add constraint admin_audit_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.announcement_dismissals add constraint announcement_dismissals_announcement_id_fkey FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE;
+alter table public.announcement_dismissals add constraint announcement_dismissals_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.announcements add constraint announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.attachments add constraint attachments_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.beds add constraint beds_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
+alter table public.booking_request_children add constraint booking_request_children_request_id_fkey FOREIGN KEY (request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
+alter table public.booking_request_guests add constraint booking_request_guests_guest_id_fkey FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE CASCADE;
+alter table public.booking_request_guests add constraint booking_request_guests_request_id_fkey FOREIGN KEY (request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
+alter table public.booking_requests add constraint booking_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES profiles(id);
+alter table public.booking_requests add constraint booking_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.bookings add constraint bookings_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES profiles(id);
+alter table public.bookings add constraint bookings_bed_id_fkey FOREIGN KEY (bed_id) REFERENCES beds(id) ON DELETE SET NULL;
+alter table public.bookings add constraint bookings_guest_id_fkey FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE SET NULL;
+alter table public.bookings add constraint bookings_request_id_fkey FOREIGN KEY (request_id) REFERENCES booking_requests(id) ON DELETE SET NULL;
+alter table public.bookings add constraint bookings_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.cleaner_hour_logs add constraint cleaner_hour_logs_cleaner_id_fkey FOREIGN KEY (cleaner_id) REFERENCES cleaners(id) ON DELETE CASCADE;
+alter table public.cleaner_hour_logs add constraint cleaner_hour_logs_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.cleaner_hours add constraint cleaner_hours_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.cleaner_pay_rates add constraint cleaner_pay_rates_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.cleaner_shifts add constraint cleaner_shifts_cleaner_id_fkey FOREIGN KEY (cleaner_id) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.cleaners add constraint cleaners_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES profiles(id);
+alter table public.contacts add constraint contacts_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.expenses add constraint expenses_booking_request_id_fkey FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE SET NULL;
+alter table public.expenses add constraint expenses_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.expenses add constraint expenses_paid_by_fkey FOREIGN KEY (paid_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.feature_flags add constraint feature_flags_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.guests add constraint guests_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.guests add constraint guests_linked_profile_id_fkey FOREIGN KEY (linked_profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.house_settings add constraint house_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.issues add constraint issues_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.issues add constraint issues_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.issues add constraint issues_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL;
+alter table public.linen_movements add constraint linen_movements_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id);
+alter table public.linen_movements add constraint linen_movements_item_id_fkey FOREIGN KEY (item_id) REFERENCES linen_items(id) ON DELETE CASCADE;
+alter table public.linen_movements add constraint linen_movements_task_id_fkey FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL;
+alter table public.messages add constraint messages_author_id_fkey FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.messages add constraint messages_booking_request_id_fkey FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
+alter table public.oneshot_tasks add constraint oneshot_tasks_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.oneshot_tasks add constraint oneshot_tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE RESTRICT;
+alter table public.oneshot_tasks add constraint oneshot_tasks_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL;
+alter table public.plant_waterings add constraint plant_waterings_plant_id_fkey FOREIGN KEY (plant_id) REFERENCES plants(id) ON DELETE CASCADE;
+alter table public.plant_waterings add constraint plant_waterings_watered_by_fkey FOREIGN KEY (watered_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.prearrival_checks add constraint prearrival_checks_booking_request_id_fkey FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id) ON DELETE CASCADE;
+alter table public.prearrival_checks add constraint prearrival_checks_checked_by_fkey FOREIGN KEY (checked_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.prearrival_checks add constraint prearrival_checks_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
+alter table public.prearrival_checks add constraint prearrival_checks_template_id_fkey FOREIGN KEY (template_id) REFERENCES prearrival_templates(id) ON DELETE CASCADE;
+alter table public.prearrival_templates add constraint prearrival_templates_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
+alter table public.profiles add constraint profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+alter table public.push_subscriptions add constraint push_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.room_linen add constraint room_linen_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
+alter table public.room_linen add constraint room_linen_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.rooms add constraint rooms_linked_bedroom_id_fkey FOREIGN KEY (linked_bedroom_id) REFERENCES rooms(id) ON DELETE SET NULL;
+alter table public.task_completions add constraint task_completions_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.task_completions add constraint task_completions_task_template_id_fkey FOREIGN KEY (task_template_id) REFERENCES task_templates(id) ON DELETE CASCADE;
+alter table public.task_templates add constraint task_templates_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
+alter table public.tasks add constraint tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.tasks add constraint tasks_related_booking_id_fkey FOREIGN KEY (related_booking_id) REFERENCES bookings(id) ON DELETE SET NULL;
+alter table public.tasks add constraint tasks_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL;
+alter table public.tasks add constraint tasks_template_id_fkey FOREIGN KEY (template_id) REFERENCES task_templates(id) ON DELETE SET NULL;
+alter table public.user_feature_prefs add constraint user_feature_prefs_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.user_room_order add constraint user_room_order_room_id_fkey FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE;
+alter table public.user_room_order add constraint user_room_order_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE;
+alter table public.wiki_pages add constraint wiki_pages_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL;
+alter table public.wiki_pages add constraint wiki_pages_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL;
 
 -- ─── FUNCTIONS ─────────────────────────────────────────────────────────────
 
@@ -1163,6 +1078,96 @@ BEGIN
 END;
 $function$
 ;
+
+-- ─── VIEWS ─────────────────────────────────────────────────────────────────
+
+create view public.cleaner_tasks_today as
+ WITH last_done AS (
+         SELECT task_completions.task_template_id,
+            max(task_completions.completed_at_date) AS last_completed_date,
+            max(task_completions.completed_at) AS last_completed_at
+           FROM task_completions
+          GROUP BY task_completions.task_template_id
+        ), effective_checkout_per_room AS (
+         SELECT r_1.id AS room_id,
+            GREATEST(COALESCE(( SELECT (max(b.check_out))::timestamp with time zone AS max
+                   FROM (bookings b
+                     JOIN beds bd ON ((bd.id = b.bed_id)))
+                  WHERE ((bd.room_id =
+                        CASE
+                            WHEN ((r_1.room_type = 'bathroom'::text) AND (r_1.linked_bedroom_id IS NOT NULL)) THEN r_1.linked_bedroom_id
+                            ELSE r_1.id
+                        END) AND (b.status = 'approved'::booking_status) AND (b.check_out <= CURRENT_DATE))), '1970-01-01 00:00:00+00'::timestamp with time zone), COALESCE(r_1.manual_turnover_at, '1970-01-01 00:00:00+00'::timestamp with time zone), COALESCE(( SELECT r2.manual_turnover_at
+                   FROM rooms r2
+                  WHERE ((r_1.room_type = 'bathroom'::text) AND (r_1.linked_bedroom_id IS NOT NULL) AND (r2.id = r_1.linked_bedroom_id))), '1970-01-01 00:00:00+00'::timestamp with time zone)) AS last_checkout_at
+           FROM rooms r_1
+        )
+ SELECT tt.id,
+    tt.name,
+    tt.notes,
+    tt.frequency_days,
+    tt.is_turnaround,
+    tt.task_kind,
+    tt.room_id,
+    r.name AS room_name,
+    r.floor,
+    r.room_type,
+    ld.last_completed_date,
+    ld.last_completed_at,
+    fg_room_state(r.id) AS room_state,
+        CASE
+            WHEN (tt.task_kind = 'turnover'::text) THEN NULL::date
+            WHEN (tt.frequency_days IS NULL) THEN NULL::date
+            WHEN (ld.last_completed_date IS NULL) THEN NULL::date
+            ELSE (ld.last_completed_date + tt.frequency_days)
+        END AS next_due_date,
+        CASE
+            WHEN (tt.task_kind = 'turnover'::text) THEN
+            CASE
+                WHEN (ec.last_checkout_at <= '1970-01-01 00:00:00+00'::timestamp with time zone) THEN 'no_schedule'::text
+                WHEN ((ld.last_completed_at IS NULL) OR (ld.last_completed_at < ec.last_checkout_at)) THEN 'overdue'::text
+                ELSE 'scheduled'::text
+            END
+            WHEN (tt.task_kind = 'occupied_only'::text) THEN
+            CASE
+                WHEN (fg_room_state(r.id) <> 'occupied'::text) THEN 'scheduled'::text
+                WHEN (tt.frequency_days IS NULL) THEN 'no_schedule'::text
+                WHEN (ld.last_completed_date IS NULL) THEN 'overdue'::text
+                WHEN ((ld.last_completed_date + tt.frequency_days) <= CURRENT_DATE) THEN
+                CASE
+                    WHEN ((ld.last_completed_date + tt.frequency_days) = CURRENT_DATE) THEN 'due'::text
+                    ELSE 'overdue'::text
+                END
+                ELSE 'scheduled'::text
+            END
+            ELSE
+            CASE
+                WHEN (tt.frequency_days IS NULL) THEN 'no_schedule'::text
+                WHEN (ld.last_completed_date IS NULL) THEN 'overdue'::text
+                WHEN ((ld.last_completed_date + tt.frequency_days) <= CURRENT_DATE) THEN
+                CASE
+                    WHEN ((ld.last_completed_date + tt.frequency_days) = CURRENT_DATE) THEN 'due'::text
+                    ELSE 'overdue'::text
+                END
+                ELSE 'scheduled'::text
+            END
+        END AS status,
+        CASE
+            WHEN (tt.task_kind = 'turnover'::text) THEN
+            CASE
+                WHEN (ec.last_checkout_at <= '1970-01-01 00:00:00+00'::timestamp with time zone) THEN NULL::integer
+                WHEN ((ld.last_completed_at IS NULL) OR (ld.last_completed_at < ec.last_checkout_at)) THEN (CURRENT_DATE - (ec.last_checkout_at)::date)
+                ELSE NULL::integer
+            END
+            WHEN ((tt.task_kind = 'occupied_only'::text) AND (fg_room_state(r.id) <> 'occupied'::text)) THEN NULL::integer
+            WHEN (tt.frequency_days IS NULL) THEN NULL::integer
+            WHEN (ld.last_completed_date IS NULL) THEN 999
+            ELSE (CURRENT_DATE - (ld.last_completed_date + tt.frequency_days))
+        END AS days_overdue
+   FROM (((task_templates tt
+     JOIN rooms r ON ((r.id = tt.room_id)))
+     LEFT JOIN last_done ld ON ((ld.task_template_id = tt.id)))
+     LEFT JOIN effective_checkout_per_room ec ON ((ec.room_id = r.id)));
 
 -- ─── TRIGGERS ──────────────────────────────────────────────────────────────
 
