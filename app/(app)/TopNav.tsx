@@ -185,6 +185,14 @@ export default function TopNav({
         match: '/pay',
       })
     }
+    if (flagOn('heating')) {
+      adminItems.push({
+        href: '/admin/heating',
+        label: 'Heating',
+        icon: '🔥',
+        match: '/admin/heating',
+      })
+    }
     adminItems.push({
       href: '/admin/house-info',
       label: 'House info',

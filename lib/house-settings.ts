@@ -9,6 +9,7 @@ export type HouseSettingKey =
   | 'fridge_notes'
   | 'arrival_notes'
   | 'bin_calendar_url'
+  | 'heating_cold_alert_c'
 
 export const HOUSE_SETTING_LABELS: Record<HouseSettingKey, string> = {
   address: 'House address',
@@ -19,6 +20,7 @@ export const HOUSE_SETTING_LABELS: Record<HouseSettingKey, string> = {
   fridge_notes: 'Fridge / kitchen notes',
   arrival_notes: 'Other arrival notes',
   bin_calendar_url: 'Bin collection iCal URL',
+  heating_cold_alert_c: 'Heating: cold-room alert (°C)',
 }
 
 export const HOUSE_SETTING_KEYS: HouseSettingKey[] = [
@@ -30,6 +32,7 @@ export const HOUSE_SETTING_KEYS: HouseSettingKey[] = [
   'fridge_notes',
   'arrival_notes',
   'bin_calendar_url',
+  'heating_cold_alert_c',
 ]
 
 export type HouseSettingsMap = Record<HouseSettingKey, string>

@@ -857,6 +857,10 @@ function BookingBar({
   onBookingTap?: (bookingId: string) => void
 }) {
   const router = useRouter()
+  // Tap-vs-drag detection. Declared before the early return below so
+  // the hook order stays stable when a bar scrolls out of the window.
+  const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
+  const movedRef = useRef(false)
   const startOffset = nightsBetween(startISO, booking.check_in)
   const endOffset = nightsBetween(startISO, booking.check_out)
   const visibleStart = Math.max(0, startOffset)
@@ -876,10 +880,6 @@ function BookingBar({
   const isCompact = laneCount > 1
   const barTop = isCompact ? 4 + lane * (30 + 3) : 8
   const barHeight = isCompact ? 30 : 40
-
-  // Tap-vs-drag detection
-  const startRef = useRef<{ x: number; y: number; t: number } | null>(null)
-  const movedRef = useRef(false)
 
   return (
     <div

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+heating-relay/relay.env
 
 # claude code (local-only)
 .claude/worktrees/

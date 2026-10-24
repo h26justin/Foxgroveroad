@@ -1,8 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Routes that don't require authentication
-const PUBLIC_PATHS = ['/login', '/signup', '/auth']
+// Routes that don't require authentication. The token / secret routes
+// do their own auth: arrival packets and calendar feeds are opened by
+// guests and calendar apps with no session, and the heating relay
+// authenticates with HEATING_RELAY_SECRET.
+const PUBLIC_PATHS = [
+  '/login',
+  '/signup',
+  '/auth',
+  '/arrival/',
+  '/api/calendar/',
+  '/api/heating/sync',
+]
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })

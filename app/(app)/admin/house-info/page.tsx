@@ -21,6 +21,8 @@ const HINTS: Partial<Record<HouseSettingKey, string>> = {
     'Anything else they should know on arrival — boiler quirks, parking, alarm code.',
   bin_calendar_url:
     'Bromley council iCal URL — either the WasteWorks page (e.g. https://recyclingservices.bromley.gov.uk/waste/6122615) or its /calendar.ics endpoint. The dashboard pulls collection days from here.',
+  heating_cold_alert_c:
+    'Admins get a push when any heating zone drops below this temperature. Leave blank to turn cold alerts off.',
 }
 
 export default async function HouseInfoPage({

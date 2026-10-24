@@ -43,6 +43,12 @@ export const FEATURES = [
     description:
       'Ad-hoc admin → cleaner tasks. Hides the "+ Post task" button and the One-off section on the housekeeping page.',
   },
+  {
+    name: 'heating',
+    label: 'Heating',
+    description:
+      'The Heating admin page. Shows Heatmiser neoHub zones and lets admins change them. Needs the relay running at the house.',
+  },
 ] as const
 
 export type FeatureName = (typeof FEATURES)[number]['name']
