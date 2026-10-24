@@ -2,11 +2,18 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import {
+  coolDownHours,
   getHeatingOverview,
+  heatingHoursPerDay,
+  isModelUsable,
   RELAY_STALE_MINUTES,
+  warmUpMinutes,
   type HeatingCommand,
+  type HeatingDay,
+  type HeatingForecastDay,
   type HeatingReading,
   type HeatingZone,
+  type HeatingZoneModel,
 } from '@/lib/heating'
 import { queueHeatingCommand } from './actions'
 import AutoRefresh from './AutoRefresh'
@@ -26,7 +33,9 @@ export default async function HeatingPage({
   ])
   if (!enabled) redirect('/housekeeping')
 
-  const { hub, lastSeenAgeMs, zones, readings, commands } = overview
+  const { hub, lastSeenAgeMs, zones, readings, commands, models, days } = overview
+  const modelByZone = new Map(models.map((m) => [m.zone_name, m]))
+  const tomorrow = hub.forecast?.[1] ?? null
   const stale =
     lastSeenAgeMs === null || lastSeenAgeMs > RELAY_STALE_MINUTES * 60_000
   const inFlight = commands.some((c) => c.status === 'pending' || c.status === 'sent')
@@ -51,6 +60,9 @@ export default async function HeatingPage({
           {lastSeenAgeMs === null
             ? 'Waiting for the relay to report in for the first time.'
             : `Hub last reported ${timeAgo(lastSeenAgeMs)}.`}
+          {hub.outdoor_temp !== null && ` Outside ${hub.outdoor_temp.toFixed(1)}°C.`}
+          {tomorrow &&
+            ` Tomorrow ${Math.round(tomorrow.min)}–${Math.round(tomorrow.max)}°C.`}
           {inFlight && ' Changes are queued — the relay picks them up within a minute.'}
         </p>
       </div>
@@ -96,7 +108,14 @@ export default async function HeatingPage({
 
           <div className="grid gap-4 sm:grid-cols-2">
             {zones.map((z) => (
-              <ZoneCard key={z.zone_name} zone={z} readings={readingsByZone.get(z.zone_name) ?? []} />
+              <ZoneCard
+                key={z.zone_name}
+                zone={z}
+                readings={readingsByZone.get(z.zone_name) ?? []}
+                model={modelByZone.get(z.zone_name)}
+                outdoor={hub.outdoor_temp}
+                tomorrow={tomorrow}
+              />
             ))}
           </div>
           {zones.length === 0 && (
@@ -105,6 +124,8 @@ export default async function HeatingPage({
             </p>
           )}
 
+          {days.length > 0 && <WeekSummary days={days} />}
+
           {commands.length > 0 && <RecentCommands commands={commands} />}
         </>
       )}
@@ -112,7 +133,19 @@ export default async function HeatingPage({
   )
 }
 
-function ZoneCard({ zone: z, readings }: { zone: HeatingZone; readings: HeatingReading[] }) {
+function ZoneCard({
+  zone: z,
+  readings,
+  model,
+  outdoor,
+  tomorrow,
+}: {
+  zone: HeatingZone
+  readings: HeatingReading[]
+  model: HeatingZoneModel | undefined
+  outdoor: number | null
+  tomorrow: HeatingForecastDay | null
+}) {
   return (
     <div className="fg-card p-5">
       <div className="flex items-start justify-between gap-3 mb-2">
@@ -149,6 +182,8 @@ function ZoneCard({ zone: z, readings }: { zone: HeatingZone; readings: HeatingR
       </div>
 
       <Sparkline readings={readings} />
+
+      <Learned zone={z} model={model} outdoor={outdoor} tomorrow={tomorrow} />
 
       <details className="mt-3">
         <summary
@@ -205,6 +240,136 @@ function ZoneCard({ zone: z, readings }: { zone: HeatingZone; readings: HeatingR
       </details>
     </div>
   )
+}
+
+/**
+ * What the thermal model has learned about this room, phrased as answers
+ * to practical questions. See lib/heating.ts for the maths.
+ */
+function Learned({
+  zone: z,
+  model,
+  outdoor,
+  tomorrow,
+}: {
+  zone: HeatingZone
+  model: HeatingZoneModel | undefined
+  outdoor: number | null
+  tomorrow: HeatingForecastDay | null
+}) {
+  const muted = { color: 'var(--color-muted)' }
+  if (!isModelUsable(model)) {
+    const days = model ? Math.floor(model.samples / 288) : 0
+    return (
+      <p className="text-xs fg-mono mt-3" style={{ color: 'var(--color-faint)' }}>
+        Learning this room — needs a few days of readings with the heating
+        cycling on and off{days > 0 ? ` (${days} day${days === 1 ? '' : 's'} so far)` : ''}.
+      </p>
+    )
+  }
+
+  const target = z.set_temp ?? 20
+  const lines: string[] = []
+  if (outdoor !== null) {
+    const hours = heatingHoursPerDay(model, target, outdoor)
+    lines.push(
+      hours >= 24
+        ? `At ${outdoor.toFixed(0)}°C outside the heating can't hold ${target}° — it would run flat out.`
+        : `Holding ${target}° at today's ${outdoor.toFixed(0)}°C outside takes ~${hours.toFixed(1)} h of heating a day.`,
+    )
+    if (z.actual_temp !== null && z.actual_temp < target - 0.3) {
+      const mins = warmUpMinutes(model, z.actual_temp, target, outdoor)
+      lines.push(
+        mins === null
+          ? `Can't reach ${target}° from here at this outdoor temperature.`
+          : `Warming from ${z.actual_temp.toFixed(1)}° to ${target}° takes ~${fmtDuration(mins)}.`,
+      )
+    }
+    const floor = target - 3
+    const cool = coolDownHours(model, target, floor, outdoor)
+    if (cool !== null) {
+      lines.push(`With the heating off it drops from ${target}° to ${floor}° in ~${fmtDuration(cool * 60)}.`)
+    }
+  }
+  if (tomorrow) {
+    const mean = (tomorrow.min + tomorrow.max) / 2
+    const hours = heatingHoursPerDay(model, target, mean)
+    lines.push(`Tomorrow (avg ${mean.toFixed(0)}°C) expect ~${hours.toFixed(1)} h at ${target}°.`)
+  }
+
+  return (
+    <div className="mt-3 text-xs fg-mono space-y-1" style={muted}>
+      {lines.map((l) => (
+        <p key={l}>{l}</p>
+      ))}
+      <p style={{ color: 'var(--color-faint)' }}>
+        Loses {model.k.toFixed(3)}°C/h per °C colder outside · heating adds{' '}
+        {model.h.toFixed(1)}°C/h · fit {Math.round((model.r2 ?? 0) * 100)}%
+      </p>
+    </div>
+  )
+}
+
+/** Heating hours per room for the last week, from heating_daily. */
+function WeekSummary({ days }: { days: HeatingDay[] }) {
+  const dates = Array.from(new Set(days.map((d) => d.day))).sort().slice(-7)
+  const zones = Array.from(new Set(days.map((d) => d.zone_name))).sort()
+  const cell = new Map(days.map((d) => [`${d.zone_name}|${d.day}`, d]))
+  const outdoorByDate = new Map<string, number>()
+  for (const d of days) {
+    if (d.avg_outdoor !== null) outdoorByDate.set(d.day, d.avg_outdoor)
+  }
+  return (
+    <div className="mt-8">
+      <div className="fg-section-label mb-3">Heating hours — last 7 days</div>
+      <div className="fg-card p-4 overflow-x-auto">
+        <table className="text-xs fg-mono w-full" style={{ color: 'var(--color-ink)' }}>
+          <thead>
+            <tr style={{ color: 'var(--color-muted)' }}>
+              <th className="text-left font-normal pr-3 pb-2">Room</th>
+              {dates.map((d) => (
+                <th key={d} className="text-right font-normal px-1 pb-2">
+                  {new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', {
+                    weekday: 'short',
+                    timeZone: 'UTC',
+                  })}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {zones.map((z) => (
+              <tr key={z}>
+                <td className="pr-3 py-1">{z}</td>
+                {dates.map((d) => {
+                  const row = cell.get(`${z}|${d}`)
+                  return (
+                    <td key={d} className="text-right px-1 py-1">
+                      {row ? row.heating_hours.toFixed(1) : '—'}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            <tr style={{ color: 'var(--color-muted)' }}>
+              <td className="pr-3 pt-2">Outside avg</td>
+              {dates.map((d) => (
+                <td key={d} className="text-right px-1 pt-2">
+                  {outdoorByDate.has(d) ? `${outdoorByDate.get(d)!.toFixed(0)}°` : '—'}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function fmtDuration(minutes: number): string {
+  if (minutes < 60) return `${Math.max(1, Math.round(minutes))} min`
+  const h = minutes / 60
+  return h < 10 ? `${h.toFixed(1)} h` : `${Math.round(h)} h`
 }
 
 const btnStyle = { width: 'auto', padding: '8px 14px', fontSize: 13 } as const

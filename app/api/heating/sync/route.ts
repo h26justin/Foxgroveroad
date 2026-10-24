@@ -3,6 +3,8 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyUsers } from '@/lib/notify'
 import { parseLiveData, type HeatingZone } from '@/lib/heating'
+import { fetchOutdoorWeather } from '@/lib/weather'
+import { addDaysISO, todayISO } from '@/lib/dates'
 
 /**
  * Endpoint for heating-relay/ (the script running at the house).
@@ -33,8 +35,15 @@ const UUID_RE = /^[0-9a-f-]{36}$/i
 /** Commands still 'sent' after this long are marked failed. */
 const SENT_TIMEOUT_MINUTES = 10
 
-/** Drop readings older than this so the table doesn't grow forever. */
+/** Drop readings older than this so the table doesn't grow forever.
+ *  heating_daily keeps the per-day summary indefinitely. */
 const READING_RETENTION_DAYS = 180
+
+/** Refresh outdoor temperature at most this often. */
+const WEATHER_TTL_MINUTES = 15
+
+/** Recompute heating_daily (today + yesterday) at most this often. */
+const ROLLUP_TTL_MINUTES = 60
 
 function authorised(request: Request): boolean {
   const secret = process.env.HEATING_RELAY_SECRET
@@ -93,9 +102,36 @@ export async function POST(request: Request) {
   if (body.live) {
     const { hubAway, hubHoliday, zones } = parseLiveData(body.live)
 
-    const { data: previous } = await admin
-      .from('heating_zones')
-      .select('zone_name, actual_temp, offline, low_battery')
+    const [{ data: previous }, { data: hubRow }] = await Promise.all([
+      admin.from('heating_zones').select('zone_name, actual_temp, offline, low_battery'),
+      admin
+        .from('heating_hub_status')
+        .select('outdoor_temp, outdoor_fetched_at, rollup_at')
+        .eq('id', 'singleton')
+        .maybeSingle(),
+    ])
+    const hubState = (hubRow ?? {}) as {
+      outdoor_temp?: number | string | null
+      outdoor_fetched_at?: string | null
+      rollup_at?: string | null
+    }
+
+    // Outdoor temperature — the thermal model needs it on every reading.
+    let outdoorTemp =
+      hubState.outdoor_temp == null ? null : Number(hubState.outdoor_temp)
+    const weatherUpdate: Record<string, unknown> = {}
+    if (olderThan(hubState.outdoor_fetched_at, WEATHER_TTL_MINUTES)) {
+      const weather = await fetchHouseWeather(admin)
+      if (weather) {
+        outdoorTemp = Math.round(weather.current * 10) / 10
+        weatherUpdate.outdoor_temp = outdoorTemp
+        weatherUpdate.forecast = weather.forecast
+        weatherUpdate.outdoor_fetched_at = now
+      } else if (olderThan(hubState.outdoor_fetched_at, 3 * WEATHER_TTL_MINUTES)) {
+        // Don't stamp stale weather onto readings — it would skew the model.
+        outdoorTemp = null
+      }
+    }
 
     await admin
       .from('heating_hub_status')
@@ -105,6 +141,7 @@ export async function POST(request: Request) {
         hub_holiday: hubHoliday,
         error: relayError,
         updated_at: now,
+        ...weatherUpdate,
       })
       .eq('id', 'singleton')
 
@@ -122,6 +159,7 @@ export async function POST(request: Request) {
           actual_temp: z.actual_temp,
           set_temp: z.set_temp,
           heat_on: z.heat_on,
+          outdoor_temp: outdoorTemp,
         })),
       )
       // Zones renamed or removed on the hub.
@@ -139,6 +177,19 @@ export async function POST(request: Request) {
         'recorded_at',
         new Date(Date.now() - READING_RETENTION_DAYS * 86_400_000).toISOString(),
       )
+
+    if (olderThan(hubState.rollup_at, ROLLUP_TTL_MINUTES)) {
+      const { error: rollupErr } = await admin.rpc('heating_rollup', {
+        p_since: addDaysISO(todayISO(), -1),
+      })
+      if (rollupErr) console.warn('[heating] rollup failed:', rollupErr.message)
+      else {
+        await admin
+          .from('heating_hub_status')
+          .update({ rollup_at: now })
+          .eq('id', 'singleton')
+      }
+    }
 
     await sendAlerts(
       admin,
@@ -228,4 +279,23 @@ async function sendAlerts(
     url: '/admin/heating',
     tag: 'heating-alert',
   })
+}
+
+function olderThan(iso: string | null | undefined, minutes: number): boolean {
+  return !iso || Date.now() - new Date(iso).getTime() > minutes * 60_000
+}
+
+/** Location comes from House info (weather_latitude / weather_longitude). */
+async function fetchHouseWeather(admin: ReturnType<typeof createAdminClient>) {
+  const { data } = await admin
+    .from('house_settings')
+    .select('key, value')
+    .in('key', ['weather_latitude', 'weather_longitude'])
+  const byKey = new Map(
+    ((data as { key: string; value: string }[] | null) ?? []).map((r) => [r.key, r.value]),
+  )
+  const lat = parseFloat(byKey.get('weather_latitude') ?? '')
+  const lon = parseFloat(byKey.get('weather_longitude') ?? '')
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  return fetchOutdoorWeather(lat, lon)
 }

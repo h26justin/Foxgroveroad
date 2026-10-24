@@ -1,5 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
+import { addDaysISO, todayISO } from '@/lib/dates'
 
 /**
  * Heatmiser neoHub integration — app side.
@@ -40,11 +41,29 @@ export type HeatingZone = {
   updated_at: string
 }
 
+export type HeatingForecastDay = { date: string; min: number; max: number }
+
 export type HeatingHubStatus = {
   last_seen_at: string | null
   hub_away: boolean
   hub_holiday: boolean
   error: string | null
+  outdoor_temp: number | null
+  forecast: HeatingForecastDay[] | null
+}
+
+/** Output of heating_zone_models() — see db/11_heating.sql §8. */
+export type HeatingZoneModel = {
+  zone_name: string
+  samples: number
+  heating_share: number | null
+  /** Heat loss, per hour per °C warmer than outside. */
+  k: number | null
+  /** Warming from the heating, °C per hour while on. */
+  h: number | null
+  /** Background gains (sun, people), °C per hour. */
+  c: number | null
+  r2: number | null
 }
 
 export type HeatingCommand = {
@@ -57,6 +76,14 @@ export type HeatingCommand = {
   result: string | null
   created_at: string
   completed_at: string | null
+}
+
+export type HeatingDay = {
+  zone_name: string
+  day: string
+  avg_temp: number | null
+  avg_outdoor: number | null
+  heating_hours: number
 }
 
 export type HeatingReading = {
@@ -133,14 +160,16 @@ export async function getHeatingOverview(): Promise<{
   zones: HeatingZone[]
   readings: HeatingReading[]
   commands: HeatingCommand[]
+  models: HeatingZoneModel[]
+  days: HeatingDay[]
 }> {
   const supabase = await createClient()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  const [hubRes, zonesRes, readingsRes, commandsRes] = await Promise.all([
+  const [hubRes, zonesRes, readingsRes, commandsRes, modelsRes, daysRes] = await Promise.all([
     supabase
       .from('heating_hub_status')
-      .select('last_seen_at, hub_away, hub_holiday, error')
+      .select('last_seen_at, hub_away, hub_holiday, error, outdoor_temp, forecast')
       .eq('id', 'singleton')
       .maybeSingle(),
     supabase
@@ -161,14 +190,25 @@ export async function getHeatingOverview(): Promise<{
       )
       .order('created_at', { ascending: false })
       .limit(15),
+    supabase.rpc('heating_zone_models', { p_days: MODEL_WINDOW_DAYS }),
+    supabase
+      .from('heating_daily')
+      .select('zone_name, day, avg_temp, avg_outdoor, heating_hours')
+      .gte('day', addDaysISO(todayISO(), -7))
+      .order('day'),
   ])
 
-  const hub = (hubRes.data as HeatingHubStatus | null) ?? {
-    last_seen_at: null,
-    hub_away: false,
-    hub_holiday: false,
-    error: null,
-  }
+  const hubRow = hubRes.data as HeatingHubStatus | null
+  const hub: HeatingHubStatus = hubRow
+    ? { ...hubRow, outdoor_temp: num(hubRow.outdoor_temp) }
+    : {
+        last_seen_at: null,
+        hub_away: false,
+        hub_holiday: false,
+        error: null,
+        outdoor_temp: null,
+        forecast: null,
+      }
 
   return {
     hub,
@@ -184,7 +224,101 @@ export async function getHeatingOverview(): Promise<{
       }),
     ),
     commands: (commandsRes.data as HeatingCommand[] | null) ?? [],
+    models: ((modelsRes.data as HeatingZoneModel[] | null) ?? []).map((m) => ({
+      ...m,
+      samples: Number(m.samples),
+      heating_share: num(m.heating_share),
+      k: num4(m.k),
+      h: num(m.h),
+      c: num(m.c),
+      r2: num(m.r2),
+    })),
+    days: ((daysRes.data as HeatingDay[] | null) ?? []).map((d) => ({
+      ...d,
+      avg_temp: num(d.avg_temp),
+      avg_outdoor: num(d.avg_outdoor),
+      heating_hours: Number(d.heating_hours) || 0,
+    })),
   }
+}
+
+/** Like num() but keeps 4 decimals (k is small, e.g. 0.0812). */
+function num4(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = typeof v === 'number' ? v : parseFloat(String(v))
+  return Number.isFinite(n) ? n : null
+}
+
+// ─── Thermal model predictions ─────────────────────────────────────────────
+//
+// The model (fitted in SQL) is  dT/dt = -k·(T - T_out) + h·on + c.
+// Everything below is that equation solved for the question being asked.
+
+/** How many days of readings the model is fitted over. */
+export const MODEL_WINDOW_DAYS = 28
+
+/**
+ * A model is only trusted once it has enough data and physically
+ * sensible coefficients. ~200 samples ≈ a day of readings; we also need
+ * the heating to have been both on and off, and a reasonable fit.
+ */
+export function isModelUsable(m: HeatingZoneModel | undefined): m is HeatingZoneModel & {
+  k: number
+  h: number
+  c: number
+} {
+  return (
+    !!m &&
+    m.samples >= 600 &&
+    m.k !== null && m.k > 0.005 && m.k < 2 &&
+    m.h !== null && m.h > 0.05 &&
+    m.c !== null &&
+    m.heating_share !== null && m.heating_share > 0.02 && m.heating_share < 0.98 &&
+    (m.r2 ?? 0) > 0.2
+  )
+}
+
+type Model = { k: number; h: number; c: number }
+
+/**
+ * Fraction of the time the heating has to run to hold `target` when it's
+ * `outdoor` outside (0–1). Above 1 means the heating can't keep up.
+ */
+export function dutyCycle(m: Model, target: number, outdoor: number): number {
+  const needed = m.k * (target - outdoor) - m.c
+  return Math.max(0, needed / m.h)
+}
+
+/** Hours of heating per day to hold `target` all day at `outdoor`. */
+export function heatingHoursPerDay(m: Model, target: number, outdoor: number): number {
+  return 24 * Math.min(1, dutyCycle(m, target, outdoor))
+}
+
+/** Temperature the room would settle at with heating on (or off). */
+export function equilibrium(m: Model, outdoor: number, heatingOn: boolean): number {
+  return outdoor + ((heatingOn ? m.h : 0) + m.c) / m.k
+}
+
+/**
+ * Minutes of continuous heating to warm from `from` to `to`, or null if
+ * the room can't get there at this outdoor temperature.
+ */
+export function warmUpMinutes(m: Model, from: number, to: number, outdoor: number): number | null {
+  if (to <= from) return 0
+  const eq = equilibrium(m, outdoor, true)
+  if (to >= eq) return null
+  return (Math.log((eq - from) / (eq - to)) / m.k) * 60
+}
+
+/**
+ * Hours for the room to cool from `from` to `to` with the heating off,
+ * or null if it would never get that cold (sun/background gains).
+ */
+export function coolDownHours(m: Model, from: number, to: number, outdoor: number): number | null {
+  if (to >= from) return 0
+  const eq = equilibrium(m, outdoor, false)
+  if (to <= eq) return null
+  return Math.log((from - eq) / (to - eq)) / m.k
 }
 
 /** PostgREST returns `numeric` columns as strings — coerce back. */
