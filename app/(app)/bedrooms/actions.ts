@@ -50,7 +50,7 @@ export async function movePillToBed(
   }
 
   // No-op if dropping on the same bed
-  if ((booking as any).bed_id === newBedId) {
+  if (booking.bed_id === newBedId) {
     return { ok: true }
   }
 
@@ -60,12 +60,12 @@ export async function movePillToBed(
     .select('id, guest_name')
     .eq('bed_id', newBedId)
     .eq('status', 'approved')
-    .lt('check_in', (booking as any).check_out)
-    .gt('check_out', (booking as any).check_in)
+    .lt('check_in', booking.check_out)
+    .gt('check_out', booking.check_in)
     .neq('id', bookingId)
 
   if (conflicts && conflicts.length > 0) {
-    const occupantName = (conflicts[0] as any).guest_name || 'another guest'
+    const occupantName = conflicts[0].guest_name || 'another guest'
     return {
       error: `That bed is already taken by ${occupantName} on those dates.`,
     }
@@ -115,11 +115,11 @@ export async function addGuestToFirstAvailableBed(
     .from('bookings')
     .select('bed_id')
     .eq('status', 'approved')
-    .lt('check_in', (req as any).check_out)
-    .gt('check_out', (req as any).check_in)
+    .lt('check_in', req.check_out)
+    .gt('check_out', req.check_in)
 
-  const occupiedSet = new Set((occupied ?? []).map((b: any) => b.bed_id))
-  const freeBed = (allBeds ?? []).find((b: any) => !occupiedSet.has(b.id))
+  const occupiedSet = new Set((occupied ?? []).map((b) => b.bed_id))
+  const freeBed = (allBeds ?? []).find((b) => !occupiedSet.has(b.id))
 
   if (!freeBed) {
     return {
@@ -129,12 +129,12 @@ export async function addGuestToFirstAvailableBed(
   }
 
   const { error } = await supabase.from('bookings').insert({
-    bed_id: (freeBed as any).id,
+    bed_id: freeBed.id,
     request_id: requestId,
-    requested_by: (req as any).requested_by,
+    requested_by: req.requested_by,
     guest_name: guestName,
-    check_in: (req as any).check_in,
-    check_out: (req as any).check_out,
+    check_in: req.check_in,
+    check_out: req.check_out,
     status: 'approved',
     approved_at: new Date().toISOString(),
     approved_by: profile.id,

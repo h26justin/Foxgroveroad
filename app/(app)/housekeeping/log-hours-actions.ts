@@ -41,7 +41,7 @@ export async function logMyHours(
     hours,
     notes,
     logged_by: profile.id,
-  } as any)
+  })
 
   if (error) return { error: error.message }
 

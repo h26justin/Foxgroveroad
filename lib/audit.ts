@@ -1,5 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
+import type { Json } from '@/lib/supabase/database.types'
 
 /**
  * Append a row to the admin_audit log. Best-effort: never throws.
@@ -27,8 +28,8 @@ export async function logAdminAction(opts: {
       action: opts.action,
       target_kind: opts.targetKind ?? null,
       target_id: opts.targetId ?? null,
-      payload: opts.payload ?? {},
-    } as any)
+      payload: (opts.payload ?? {}) as Json,
+    })
     if (error) {
       console.warn('[audit] insert failed:', error.message)
     }

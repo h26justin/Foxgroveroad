@@ -41,7 +41,7 @@ export async function markTaskComplete(
 
   revalidatePath('/housekeeping')
   revalidatePath('/dashboard')
-  return { completionId: (data as any)?.id }
+  return { completionId: data?.id }
 }
 
 /**

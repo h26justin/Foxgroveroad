@@ -46,22 +46,22 @@ export default async function ExpensesPage() {
       .order('full_name'),
   ])
 
-  const rows = ((expensesRes.data as any[]) ?? []).map((r) => ({
-    id: r.id as string,
-    date: r.date as string,
+  const rows = (expensesRes.data ?? []).map((r) => ({
+    id: r.id,
+    date: r.date,
     amount_pence: Number(r.amount_pence),
-    currency: r.currency as string,
-    category: r.category as string,
-    description: r.description as string,
-    paid_by: (r.paid_by as string | null) ?? null,
-    payer_name: (r.payer as any)?.full_name ?? 'Someone',
-    creator_id: (r.created_by as string | null) ?? null,
-    created_at: r.created_at as string,
+    currency: r.currency,
+    category: r.category,
+    description: r.description,
+    paid_by: r.paid_by ?? null,
+    payer_name: r.payer?.full_name ?? 'Someone',
+    creator_id: r.created_by ?? null,
+    created_at: r.created_at,
   }))
 
-  const payers = ((payersRes.data as any[]) ?? []).map((p) => ({
-    id: p.id as string,
-    full_name: p.full_name as string,
+  const payers = (payersRes.data ?? []).map((p) => ({
+    id: p.id,
+    full_name: p.full_name,
   }))
 
   return (

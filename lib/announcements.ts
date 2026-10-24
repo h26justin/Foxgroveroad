@@ -31,15 +31,15 @@ export async function getActiveAnnouncementFor(
   if (!ann) return null
 
   // Has this user dismissed it?
-  if ((ann as any).dismissible) {
+  if (ann.dismissible) {
     const { data: dismissal } = await supabase
       .from('announcement_dismissals')
       .select('announcement_id')
-      .eq('announcement_id', (ann as any).id)
+      .eq('announcement_id', ann.id)
       .eq('user_id', userId)
       .maybeSingle()
     if (dismissal) return null
   }
 
-  return ann as ActiveAnnouncement
+  return ann
 }

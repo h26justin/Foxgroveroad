@@ -57,7 +57,7 @@ export async function createExpense(
     paid_by: paidById,
     booking_request_id: bookingRequestId,
     created_by: profile.id,
-  } as any)
+  })
   if (error) return { error: error.message }
 
   revalidatePath('/expenses')

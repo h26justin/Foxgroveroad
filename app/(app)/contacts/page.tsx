@@ -36,13 +36,13 @@ export default async function ContactsPage() {
     .order('kind')
     .order('name')
 
-  const contacts = ((rows as any[]) ?? []).map((c) => ({
-    id: c.id as string,
-    name: c.name as string,
-    kind: c.kind as string,
-    phone: (c.phone as string | null) ?? null,
-    email: (c.email as string | null) ?? null,
-    notes: (c.notes as string | null) ?? null,
+  const contacts = (rows ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    kind: c.kind,
+    phone: c.phone ?? null,
+    email: c.email ?? null,
+    notes: c.notes ?? null,
     is_pinned: !!c.is_pinned,
   }))
 

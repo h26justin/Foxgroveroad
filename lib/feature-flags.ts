@@ -72,12 +72,12 @@ export const getFeatureFlags = cache(
         return defaultFlagMap()
       }
       const map = defaultFlagMap()
-      for (const row of (data as any[]) ?? []) {
+      for (const row of data ?? []) {
         map[row.name] = !!row.enabled
       }
       return map
-    } catch (err: any) {
-      console.error('[features] threw:', err?.message ?? err)
+    } catch (err) {
+      console.error('[features] threw:', err instanceof Error ? err.message : err)
       return defaultFlagMap()
     }
   },

@@ -39,7 +39,7 @@ export async function createPage(
       is_pinned: isPinned,
       created_by: me.id,
       updated_by: me.id,
-    } as any)
+    })
     .select('slug')
     .single()
 
@@ -51,7 +51,7 @@ export async function createPage(
   }
 
   revalidatePath('/wiki')
-  return { ok: true, slug: (data as any).slug }
+  return { ok: true, slug: data.slug }
 }
 
 export async function updatePage(
@@ -75,7 +75,7 @@ export async function updatePage(
       is_pinned: isPinned,
       updated_by: me.id,
       updated_at: new Date().toISOString(),
-    } as any)
+    })
     .eq('id', id)
     .select('slug')
     .single()
@@ -83,8 +83,8 @@ export async function updatePage(
   if (error) return { error: error.message }
 
   revalidatePath('/wiki')
-  revalidatePath(`/wiki/${(data as any).slug}`)
-  return { ok: true, slug: (data as any).slug }
+  revalidatePath(`/wiki/${data.slug}`)
+  return { ok: true, slug: data.slug }
 }
 
 export async function deletePage(

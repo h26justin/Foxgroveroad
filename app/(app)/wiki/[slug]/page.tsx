@@ -27,9 +27,9 @@ export default async function WikiPage({
     .maybeSingle()
 
   if (!page) notFound()
-  const p = page as any
+  const p = page
   const isAdmin = profile.role === 'admin'
-  const updaterName = (p.updater as any)?.full_name ?? null
+  const updaterName = p.updater?.full_name ?? null
 
   return (
     <div className="max-w-2xl">

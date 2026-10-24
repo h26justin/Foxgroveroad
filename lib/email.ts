@@ -70,7 +70,7 @@ export async function sendEmail(opts: {
       }
     }
     return { ok: true }
-  } catch (err: any) {
-    return { ok: false, error: err?.message ?? 'fetch failed' }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'fetch failed' }
   }
 }

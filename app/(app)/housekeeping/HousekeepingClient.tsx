@@ -17,7 +17,7 @@ import { togglePrearrivalCheck } from '../house/actions'
 
 // ─── Types ────────────────────────────────────────────────────────────
 
-type DueTask = {
+export type DueTask = {
   id: string
   name: string
   notes: string | null
@@ -34,23 +34,27 @@ type DueTask = {
   days_overdue: number | null
 }
 
-type Completion = {
+export type Completion = {
   id: string
   completed_at: string
   completed_by: string | null
   task_template_id: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  task_templates: any
+  task_templates: {
+    id: string
+    name: string
+    room_id: string | null
+    rooms: { id: string; name: string } | null
+  } | null
 }
 
-type Room = {
+export type Room = {
   id: string
   name: string
   floor: number
   room_type: string
 }
 
-type RoomOrderRow = { room_id: string; position: number }
+export type RoomOrderRow = { room_id: string; position: number }
 
 type Profile = { id: string; full_name: string; role: string }
 
@@ -138,7 +142,6 @@ export default function HousekeepingClient({
   plants: import('@/lib/plants').PlantWithStatus[]
 }) {
   const canTick = profile.role === 'admin' || profile.role === 'cleaner'
-  const isAdmin = profile.role === 'admin'
 
   // v32: surface a toast when admin flags a task for redo
   const handleFlagged = (msg: string) => {
@@ -155,9 +158,18 @@ export default function HousekeepingClient({
     snapshot: { task: DueTask; completion: Completion } | null
   } | null>(null)
 
-  // Re-sync if server props change (rare — happens on hard nav)
-  useEffect(() => { setDueTasks(initialDueTasks) }, [initialDueTasks])
-  useEffect(() => { setCompletions(initialCompletions) }, [initialCompletions])
+  // Re-sync if server props change (rare — happens on hard nav).
+  // Adjusts state during render rather than in an effect.
+  const [prevInitialDueTasks, setPrevInitialDueTasks] = useState(initialDueTasks)
+  if (initialDueTasks !== prevInitialDueTasks) {
+    setPrevInitialDueTasks(initialDueTasks)
+    setDueTasks(initialDueTasks)
+  }
+  const [prevInitialCompletions, setPrevInitialCompletions] = useState(initialCompletions)
+  if (initialCompletions !== prevInitialCompletions) {
+    setPrevInitialCompletions(initialCompletions)
+    setCompletions(initialCompletions)
+  }
 
   // ─── Sort mode state ───────────────────────────────────────────
   const [sortMode, setSortMode] = useState<SortMode>(
@@ -185,8 +197,7 @@ export default function HousekeepingClient({
   const completionsByRoom = useMemo(() => {
     const m = new Map<string, Completion[]>()
     for (const c of completions) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const roomId = (c.task_templates as any)?.room_id
+      const roomId = c.task_templates?.room_id
       if (!roomId) continue
       if (!m.has(roomId)) m.set(roomId, [])
       m.get(roomId)!.push(c)
@@ -315,7 +326,11 @@ export default function HousekeepingClient({
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(() =>
     activeRoomId ? new Set([activeRoomId]) : new Set()
   )
-  useEffect(() => {
+  // Expand the room named in ?room= when it changes (state adjusted
+  // during render rather than in an effect).
+  const [prevActiveRoomId, setPrevActiveRoomId] = useState(activeRoomId)
+  if (activeRoomId !== prevActiveRoomId) {
+    setPrevActiveRoomId(activeRoomId)
     if (activeRoomId) {
       setExpandedRooms((prev) => {
         if (prev.has(activeRoomId)) return prev
@@ -324,7 +339,7 @@ export default function HousekeepingClient({
         return next
       })
     }
-  }, [activeRoomId])
+  }
 
   const toggleRoom = (roomId: string) => {
     setExpandedRooms((prev) => {
@@ -1120,8 +1135,7 @@ function CompletedSection({
       {expanded && (
         <div className="px-3 pb-3 pt-1 space-y-1">
           {completions.map((c) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const taskName = (c.task_templates as any)?.name ?? '(deleted task)'
+            const taskName = c.task_templates?.name ?? '(deleted task)'
             const time = new Date(c.completed_at).toLocaleTimeString('en-GB', {
               hour: '2-digit',
               minute: '2-digit',
@@ -1197,10 +1211,13 @@ function PrearrivalSection({
   const [optimisticChecked, setOptimisticChecked] = useState<Set<string>>(
     () => new Set(prearrival.checkedTemplateIds),
   )
-  // Re-sync if server-provided ids change (e.g. on revalidate)
-  useEffect(() => {
+  // Re-sync if server-provided ids change (e.g. on revalidate) —
+  // adjusted during render rather than in an effect.
+  const [prevCheckedIds, setPrevCheckedIds] = useState(prearrival.checkedTemplateIds)
+  if (prearrival.checkedTemplateIds !== prevCheckedIds) {
+    setPrevCheckedIds(prearrival.checkedTemplateIds)
     setOptimisticChecked(new Set(prearrival.checkedTemplateIds))
-  }, [prearrival.checkedTemplateIds])
+  }
 
   const checkInDate = new Date(prearrival.check_in + 'T00:00:00')
   const today = new Date()

@@ -115,7 +115,7 @@ export default function UpdatePasswordPage() {
                 className="text-sm fg-mono mb-4"
                 style={{ color: 'var(--color-muted)' }}
               >
-                You're updating the password for{' '}
+                You&apos;re updating the password for{' '}
                 <strong style={{ color: 'var(--color-ink)' }}>
                   {authedAs}
                 </strong>

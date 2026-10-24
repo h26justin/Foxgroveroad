@@ -42,14 +42,11 @@ export async function GET(
   const { data: requests } = await admin
     .from('booking_requests')
     .select('id, check_in, check_out, adults, children, notes')
-    .eq('requested_by', (profile as any).id)
+    .eq('requested_by', profile.id)
     .eq('status', 'approved')
     .order('check_in')
 
-  const ics = buildIcs(
-    (profile as any).full_name as string,
-    ((requests as any[]) ?? []),
-  )
+  const ics = buildIcs(profile.full_name, requests ?? [])
 
   return new Response(ics, {
     status: 200,

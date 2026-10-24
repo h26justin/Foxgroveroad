@@ -23,7 +23,7 @@ export async function getCleanerForProfile(
     .eq('is_active', true)
     .maybeSingle()
   if (!data) return null
-  return { id: (data as any).id as string, name: (data as any).name as string }
+  return { id: data.id, name: data.name }
 }
 
 export type SelfLogRow = {
@@ -49,12 +49,12 @@ export async function recentSelfLogsForCleaner(
     .order('date', { ascending: false })
     .order('logged_at', { ascending: false })
     .limit(limit)
-  return ((data as any[]) ?? []).map((r) => ({
-    id: r.id as string,
-    date: r.date as string,
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    date: r.date,
     hours: Number(r.hours),
-    notes: (r.notes as string | null) ?? null,
-    logged_at: r.logged_at as string,
+    notes: r.notes ?? null,
+    logged_at: r.logged_at,
   }))
 }
 
@@ -80,8 +80,8 @@ export async function selfLoggedHoursForWeek(
     .lte('date', end)
 
   const totals: Record<string, number> = {}
-  for (const r of (data as any[]) ?? []) {
-    const name = ((r.cleaners as any)?.name ?? '').toString().toLowerCase()
+  for (const r of data ?? []) {
+    const name = (r.cleaners?.name ?? '').toString().toLowerCase()
     if (!name) continue
     totals[name] = (totals[name] ?? 0) + Number(r.hours)
   }

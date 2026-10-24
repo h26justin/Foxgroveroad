@@ -21,13 +21,13 @@ export default async function WikiIndexPage() {
     .order('is_pinned', { ascending: false })
     .order('title')
 
-  const pages = ((rows as any[]) ?? []).map((p) => ({
-    id: p.id as string,
-    slug: p.slug as string,
-    title: p.title as string,
+  const pages = (rows ?? []).map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
     is_pinned: !!p.is_pinned,
-    updated_at: p.updated_at as string,
-    updater_name: (p.updater as any)?.full_name ?? null,
+    updated_at: p.updated_at,
+    updater_name: p.updater?.full_name ?? null,
   }))
 
   const isAdmin = profile.role === 'admin'

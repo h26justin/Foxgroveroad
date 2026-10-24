@@ -50,7 +50,7 @@ export async function sendPushToUsers(
   const body = JSON.stringify(payload)
 
   await Promise.allSettled(
-    subs.map(async (s: any) => {
+    subs.map(async (s) => {
       try {
         await webpush.sendNotification(
           {
@@ -59,8 +59,8 @@ export async function sendPushToUsers(
           },
           body,
         )
-      } catch (err: any) {
-        const code = err?.statusCode
+      } catch (err) {
+        const code = (err as { statusCode?: number } | null)?.statusCode
         if (code === 404 || code === 410) {
           // Subscription is gone — clean it up
           await supabase
@@ -71,7 +71,7 @@ export async function sendPushToUsers(
           console.error(
             '[push] sendNotification failed:',
             code,
-            err?.message ?? err,
+            err instanceof Error ? err.message : err,
           )
         }
       }
@@ -90,5 +90,5 @@ export async function getCleanerUserIds(): Promise<string[]> {
     .select('id')
     .eq('role', 'cleaner')
   if (error || !data) return []
-  return data.map((p: any) => p.id as string)
+  return data.map((p) => p.id)
 }
