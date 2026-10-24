@@ -1,6 +1,7 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { isFeatureEnabled } from '@/lib/feature-flags'
+import type { ComponentProps } from 'react'
 import LinenClient from './LinenClient'
 import { redirect } from 'next/navigation'
 
@@ -43,8 +44,8 @@ export default async function LinenPage({
   return (
     <LinenClient
       profile={profile}
-      rooms={(roomsRes.data as any[]) ?? []}
-      linen={(linenRes.data as any[]) ?? []}
+      rooms={(roomsRes.data ?? []) as ComponentProps<typeof LinenClient>['rooms']}
+      linen={linenRes.data ?? []}
       savedMessage={sp.saved ?? null}
       errorMessage={sp.error ?? null}
     />

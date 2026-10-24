@@ -30,7 +30,7 @@ export async function recordPlantWatering(
   if (error) return { error: error.message }
 
   revalidatePath('/housekeeping')
-  return { wateringId: (data as any)?.id }
+  return { wateringId: data?.id }
 }
 
 /**
@@ -81,7 +81,7 @@ export async function createPlant(
     .order('position', { ascending: false })
     .limit(1)
     .maybeSingle()
-  const nextPos = ((maxRow as any)?.position ?? 0) + 1
+  const nextPos = (maxRow?.position ?? 0) + 1
 
   const { error } = await supabase.from('plants').insert({
     name,

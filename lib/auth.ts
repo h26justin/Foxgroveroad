@@ -46,7 +46,8 @@ export const getCurrentProfile = cache(async () => {
 })
 
 /**
- * Throws + redirects to /login if not signed in. Returns the profile.
+ * Throws + redirects to /login if not signed in (or /awaiting-approval
+ * if not yet approved). Returns the profile.
  * Use as `const profile = await requireProfile()` at the top of any
  * authed page — handles auth checks in one line.
  */
@@ -55,6 +56,12 @@ export async function requireProfile() {
   if (!profile) {
     const { redirect } = await import('next/navigation')
     redirect('/login')
+  }
+  // Unapproved sign-ups can't act. The (app) layout already bounces them
+  // for pages, but server actions don't run the layout — so check here.
+  if (profile!.role === 'pending') {
+    const { redirect } = await import('next/navigation')
+    redirect('/awaiting-approval')
   }
   return profile!
 }

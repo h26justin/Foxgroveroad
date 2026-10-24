@@ -117,7 +117,7 @@ export default async function FeaturesAdminPage({
         style={{ color: 'var(--color-muted)' }}
       >
         Note: turning a feature off hides its tab in the top navigation.
-        If a user is currently on a disabled page they'll be sent to the
+        If a user is currently on a disabled page they&apos;ll be sent to the
         Housekeeping page on their next click.
       </p>
     </div>

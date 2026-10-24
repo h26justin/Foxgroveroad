@@ -2,10 +2,16 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { floorLabel } from '@/lib/floors'
+import type { Tables } from '@/lib/supabase/database.types'
 
 // Cache for 60s — rooms + task counts don't change often. revalidatePath()
 // on the actions will bust the cache when an admin edits something.
 export const revalidate = 60
+
+type RoomRow = Pick<
+  Tables<'rooms'>,
+  'id' | 'name' | 'floor' | 'room_type' | 'is_owner_room' | 'cleaning_status'
+> & { beds: Pick<Tables<'beds'>, 'id' | 'name' | 'bed_type'>[] }
 
 const TYPE_META: Record<
   string,
@@ -50,14 +56,16 @@ export default async function AdminRoomsPage() {
 
   const taskCountByRoom = new Map<string, number>()
   for (const r of taskRows ?? []) {
-    const id = (r as any).room_id as string
+    const id = r.room_id
+    if (!id) continue
     taskCountByRoom.set(id, (taskCountByRoom.get(id) ?? 0) + 1)
   }
 
-  const byFloor = new Map<number, any[]>()
+  const byFloor = new Map<number, RoomRow[]>()
   for (const r of rooms ?? []) {
-    if (!byFloor.has(r.floor)) byFloor.set(r.floor, [])
-    byFloor.get(r.floor)!.push(r)
+    const floor = r.floor ?? 0
+    if (!byFloor.has(floor)) byFloor.set(floor, [])
+    byFloor.get(floor)!.push(r)
   }
 
   const floorOrder = Array.from(byFloor.keys()).sort((a, b) => b - a)
@@ -66,7 +74,7 @@ export default async function AdminRoomsPage() {
   const totalBedrooms =
     rooms?.filter((r) => r.room_type === 'bedroom').length ?? 0
   const totalBeds =
-    rooms?.reduce((acc, r) => acc + ((r.beds as any[]) || []).length, 0) ?? 0
+    rooms?.reduce((acc, r) => acc + (r.beds || []).length, 0) ?? 0
   const totalTasks = taskRows?.length ?? 0
 
   return (
@@ -161,12 +169,12 @@ function RoomCard({
   room,
   taskCount,
 }: {
-  room: any
+  room: RoomRow
   taskCount: number
 }) {
   const typeMeta = TYPE_META[room.room_type] ?? TYPE_META.common
   const status = STATUS_META[room.cleaning_status] ?? null
-  const beds: any[] = (room.beds as any[]) ?? []
+  const beds = room.beds ?? []
 
   return (
     <Link

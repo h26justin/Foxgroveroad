@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { listAttachmentsForEntities } from '@/lib/attachments'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { redirect } from 'next/navigation'
+import type { ComponentProps } from 'react'
 import IssuesClient from './IssuesClient'
 
 // Soft cache. Mutations call revalidatePath('/issues') so admin's own
@@ -42,7 +42,7 @@ export default async function IssuesPage({
     .eq('status', filter)
     .order('created_at', { ascending: false })
 
-  const rows = (rowsRaw as any[]) ?? []
+  const rows = rowsRaw ?? []
 
   // Bulk-fetch photos for all visible issues in one trip.
   const issueIds = rows.map((r) => r.id)
@@ -53,7 +53,7 @@ export default async function IssuesPage({
     id: r.id,
     created_at: r.created_at,
     description: r.description,
-    status: r.status,
+    status: r.status as 'open' | 'resolved',
     resolved_at: r.resolved_at,
     resolution_note: r.resolution_note,
     room_id: r.room_id,
@@ -90,7 +90,7 @@ export default async function IssuesPage({
       filter={filter}
       openCount={openCountRes.count ?? 0}
       resolvedCount={resolvedCountRes.count ?? 0}
-      rooms={(roomsRes.data as any[]) ?? []}
+      rooms={(roomsRes.data ?? []) as ComponentProps<typeof IssuesClient>['rooms']}
       savedMessage={sp.saved ?? null}
       errorMessage={sp.error ?? null}
     />

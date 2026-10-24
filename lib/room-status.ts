@@ -19,6 +19,10 @@
  *   - Same-day checkout + check-in → orange (the new booking wins)
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { addDaysISO } from '@/lib/dates'
+import type { Database } from '@/lib/supabase/database.types'
+
 export type RoomStatus = 'green' | 'orange' | 'red'
 
 export type RoomStatusInfo = {
@@ -43,16 +47,11 @@ const STALENESS_DAYS = 7
  * task completions are all readable to admin/cleaner/family by your
  * existing policies, so this works for any authed page.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getAllRoomStatuses(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   today: string,
 ): Promise<Map<string, RoomStatusInfo>> {
-  const stalenessFrom = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() - STALENESS_DAYS)
-    return d.toISOString().split('T')[0]
-  })()
+  const stalenessFrom = addDaysISO(today, -STALENESS_DAYS)
 
   const [roomsRes, bookingsRes, templatesRes, completionsRes] =
     await Promise.all([
@@ -80,14 +79,10 @@ export async function getAllRoomStatuses(
         .gte('completed_at_date', stalenessFrom),
     ])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rooms = (roomsRes.data ?? []) as any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bookings = (bookingsRes.data ?? []) as any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const templates = (templatesRes.data ?? []) as any[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const completions = (completionsRes.data ?? []) as any[]
+  const rooms = roomsRes.data ?? []
+  const bookings = bookingsRes.data ?? []
+  const templates = templatesRes.data ?? []
+  const completions = completionsRes.data ?? []
 
   // Index turnaround templates by room
   const templatesByRoom = new Map<string, string[]>()
@@ -112,7 +107,7 @@ export async function getAllRoomStatuses(
   const occupiedNow = new Map<string, string | null>() // roomId → guest name
   const lastCheckoutByRoom = new Map<string, string>() // roomId → date
   for (const b of bookings) {
-    const roomId = (b.beds as any)?.room_id
+    const roomId = b.beds?.room_id
     if (!roomId) continue
 
     if (b.check_in <= today && b.check_out > today) {

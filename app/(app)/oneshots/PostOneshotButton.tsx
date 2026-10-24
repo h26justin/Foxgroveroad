@@ -141,9 +141,9 @@ export default function PostOneshotButton({
       setPriority('normal')
       setPhotoFile(null)
       startTransition(() => router.refresh())
-    } catch (e: any) {
+    } catch (e) {
       setBusy(false)
-      setError(e?.message ?? 'Something went wrong')
+      setError(e instanceof Error ? e.message : 'Something went wrong')
     }
   }
 

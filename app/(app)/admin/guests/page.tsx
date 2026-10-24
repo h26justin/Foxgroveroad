@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
+import { todayISO } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/server'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import AddGuestButton from './AddGuestButton'
@@ -27,30 +28,42 @@ export default async function GuestsIndexPage() {
     )
     .order('full_name')
 
-  const guests = (guestsRaw as any[]) ?? []
+  const guests = guestsRaw ?? []
   const guestIds = guests.map((g) => g.id)
 
   // Count stays per guest from bookings.guest_id, plus from
   // booking_requests.requested_by → profile → guest link for the
   // legacy "this is the requester's record" pattern.
   // For simplicity, we count direct guest_id matches first.
-  let stayCounts: Record<string, { total: number; upcoming: number; lastStay: string | null }> = {}
+  const stayCounts: Record<string, { total: number; upcoming: number; lastStay: string | null }> = {}
   if (guestIds.length > 0) {
-    const todayISO = new Date().toISOString().slice(0, 10)
+    const today = todayISO()
+    // A stay can appear as several bed bookings for one request, and
+    // again via the linked profile's request below — count each stay
+    // once per guest, keyed by request id (or booking id if unlinked).
+    const seen = new Set<string>()
+    const firstSighting = (guestId: string, stayKey: string) => {
+      const key = `${guestId}|${stayKey}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }
     const { data: bookingRows } = await supabase
       .from('bookings')
-      .select('guest_id, check_in, check_out, status')
+      .select('id, request_id, guest_id, check_in, check_out, status')
       .in('guest_id', guestIds)
       .eq('status', 'approved')
-    for (const b of (bookingRows as any[]) ?? []) {
+    for (const b of bookingRows ?? []) {
+      if (!b.guest_id) continue
+      if (!firstSighting(b.guest_id, b.request_id ?? `booking:${b.id}`)) continue
       const cur = stayCounts[b.guest_id] ?? {
         total: 0,
         upcoming: 0,
         lastStay: null as string | null,
       }
       cur.total += 1
-      if (b.check_in >= todayISO) cur.upcoming += 1
-      if (b.check_in < todayISO && (!cur.lastStay || b.check_in > cur.lastStay)) {
+      if (b.check_in >= today) cur.upcoming += 1
+      if (b.check_in < today && (!cur.lastStay || b.check_in > cur.lastStay)) {
         cur.lastStay = b.check_in
       }
       stayCounts[b.guest_id] = cur
@@ -60,25 +73,28 @@ export default async function GuestsIndexPage() {
     // account holders show stays even before bed-pill linking is built.
     const linkedGuests = guests.filter((g) => g.linked_profile_id)
     if (linkedGuests.length > 0) {
-      const linkedProfileIds = linkedGuests.map((g) => g.linked_profile_id)
+      const linkedProfileIds = linkedGuests
+        .map((g) => g.linked_profile_id)
+        .filter((id): id is string => !!id)
       const { data: reqRows } = await supabase
         .from('booking_requests')
-        .select('requested_by, check_in, status')
+        .select('id, requested_by, check_in, status')
         .in('requested_by', linkedProfileIds)
         .eq('status', 'approved')
-      for (const r of (reqRows as any[]) ?? []) {
+      for (const r of reqRows ?? []) {
         const guest = linkedGuests.find(
           (g) => g.linked_profile_id === r.requested_by,
         )
         if (!guest) continue
+        if (!firstSighting(guest.id, r.id)) continue
         const cur = stayCounts[guest.id] ?? {
           total: 0,
           upcoming: 0,
           lastStay: null as string | null,
         }
         cur.total += 1
-        if (r.check_in >= todayISO) cur.upcoming += 1
-        if (r.check_in < todayISO && (!cur.lastStay || r.check_in > cur.lastStay)) {
+        if (r.check_in >= today) cur.upcoming += 1
+        if (r.check_in < today && (!cur.lastStay || r.check_in > cur.lastStay)) {
           cur.lastStay = r.check_in
         }
         stayCounts[guest.id] = cur
@@ -96,11 +112,11 @@ export default async function GuestsIndexPage() {
     .select('id, full_name, role')
     .in('role', ['admin', 'family'])
     .order('full_name')
-  const linkableProfiles = ((allProfiles as any[]) ?? []).filter(
+  const linkableProfiles = (allProfiles ?? []).filter(
     (p) => !linkedProfileIds.has(p.id),
   )
 
-  function hasAnyNotes(g: any): boolean {
+  function hasAnyNotes(g: (typeof guests)[number]): boolean {
     return Boolean(
       g.dietary_notes ||
         g.allergies ||
@@ -183,7 +199,7 @@ export default async function GuestsIndexPage() {
                           }}
                         >
                           🔗 has account ·{' '}
-                          {(g.profiles as any)?.role ?? 'member'}
+                          {g.profiles?.role ?? 'member'}
                         </span>
                       )}
                       {!hasAnyNotes(g) && (

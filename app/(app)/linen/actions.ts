@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireProfile } from '@/lib/auth'
+import type { TablesUpdate } from '@/lib/supabase/database.types'
 
 const PILLOWS_PER_BED: Record<string, number> = {
   single: 2,
@@ -54,7 +55,7 @@ export async function recomputeLinenFromBeds(): Promise<{
   type ItemKey = { room_id: string; item_type: string; size: string | null }
   const computed: (ItemKey & { expected_count: number })[] = []
 
-  for (const room of (rooms ?? []) as any[]) {
+  for (const room of rooms ?? []) {
     const beds = (room.beds ?? []) as { bed_type: string }[]
     if (beds.length === 0) continue
 
@@ -135,7 +136,7 @@ export async function recomputeLinenFromBeds(): Promise<{
           updated_at: new Date().toISOString(),
           updated_by: profile.id,
         })
-        .eq('id', (existing as any).id)
+        .eq('id', existing.id)
       if (error) return { error: error.message }
       updated++
     } else {
@@ -179,16 +180,20 @@ export async function updateLinenCount(
 
   if (readErr || !row) return { error: readErr?.message ?? 'Not found' }
 
-  const currentVal = (row as any)[field] as number
+  const currentVal = row[field]
   const newVal = Math.max(0, currentVal + delta)
+
+  // Computed keys widen to an index signature, so build the patch as a
+  // typed object and set the dynamic field separately.
+  const patch: TablesUpdate<'room_linen'> = {
+    updated_at: new Date().toISOString(),
+    updated_by: profile.id,
+  }
+  patch[field] = newVal
 
   const { error: writeErr } = await supabase
     .from('room_linen')
-    .update({
-      [field]: newVal,
-      updated_at: new Date().toISOString(),
-      updated_by: profile.id,
-    })
+    .update(patch)
     .eq('id', linenId)
 
   if (writeErr) return { error: writeErr.message }

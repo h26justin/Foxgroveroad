@@ -19,7 +19,7 @@ export default async function SettingsPage({
     headers(),
   ])
   const { saved, error } = sp
-  const accMode = (profile as any).accessibility_mode ?? 'normal'
+  const accMode = profile.accessibility_mode ?? 'normal'
   // v46: load per-user feature prefs so we can pre-check the toggles.
   const prefs = await getUserPrefs(profile.id)
 
@@ -32,7 +32,7 @@ export default async function SettingsPage({
     .select('calendar_token')
     .eq('id', profile.id)
     .maybeSingle()
-  const calendarToken = (tokenRow as any)?.calendar_token ?? null
+  const calendarToken = tokenRow?.calendar_token ?? null
   const proto = hdrs.get('x-forwarded-proto') ?? 'https'
   const host = hdrs.get('host') ?? ''
   const feedUrl = calendarToken

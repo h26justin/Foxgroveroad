@@ -123,7 +123,7 @@ export async function createBookingRequest(formData: FormData) {
   // Now insert children rows (if any)
   if (childrenPayload.length > 0) {
     const childRows = childrenPayload.map((c, i) => ({
-      request_id: (created as any).id,
+      request_id: created.id,
       age_band: c.age_band,
       sleep_arrangement: c.sleep_arrangement,
       position: i,
@@ -138,7 +138,7 @@ export async function createBookingRequest(formData: FormData) {
       await supabase
         .from('booking_requests')
         .delete()
-        .eq('id', (created as any).id)
+        .eq('id', created.id)
       redirect(
         `/bookings/new?error=${encodeURIComponent('Could not save children: ' + childErr.message)}`
       )

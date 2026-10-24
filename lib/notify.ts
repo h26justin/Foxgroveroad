@@ -45,9 +45,7 @@ export async function notifyUsers(
         .in('user_id', userIds)
         .eq('email_notifications', true)
 
-      const optedInIds = ((prefs as any[]) ?? []).map(
-        (r) => r.user_id as string,
-      )
+      const optedInIds = (prefs ?? []).map((r) => r.user_id)
       if (optedInIds.length === 0) return
 
       // Look up auth emails (one round-trip per user — auth.admin

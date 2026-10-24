@@ -23,7 +23,7 @@ export async function postMessage(
     booking_request_id: scope === 'booking' ? bookingId : null,
     body,
     author_id: profile.id,
-  } as any)
+  })
   if (error) return { error: error.message }
 
   revalidatePath('/chat')
@@ -40,7 +40,7 @@ export async function softDeleteMessage(
   // RLS allows update only if author_id = auth.uid() OR is_admin.
   const { error } = await supabase
     .from('messages')
-    .update({ deleted_at: new Date().toISOString() } as any)
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/chat')

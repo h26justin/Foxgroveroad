@@ -7,7 +7,6 @@ type TaskStatus = 'overdue' | 'due' | 'scheduled' | 'turnaround' | 'no_schedule'
 type TaskKind = 'turnover' | 'recurring' | 'occupied_only'
 
 export default function TaskRow({
-  taskId,
   name,
   notes,
   status,
@@ -80,8 +79,8 @@ export default function TaskRow({
           ? `🚩 Flagged "${name}" as urgent redo`
           : `🚩 Flagged "${name}" for redo`,
       )
-    } catch (e: any) {
-      setFlagError(e?.message ?? 'Failed to flag task')
+    } catch (e) {
+      setFlagError(e instanceof Error ? e.message : 'Failed to flag task')
       setFlagBusy(false)
     }
   }

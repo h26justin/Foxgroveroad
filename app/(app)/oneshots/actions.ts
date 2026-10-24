@@ -85,8 +85,8 @@ export async function createOneshotTask(
         tag: `oneshot-${row.id}`,
       })
     }
-  } catch (err: any) {
-    console.error('[oneshot] push notify failed:', err?.message ?? err)
+  } catch (err) {
+    console.error('[oneshot] push notify failed:', err instanceof Error ? err.message : err)
   }
 
   return { ok: true, task_id: row.id }
@@ -194,7 +194,7 @@ export async function restoreOneshotTask(snapshot: {
     status: 'pending',
     created_at: snapshot.created_at,
     created_by: profile.id, // best-effort; original creator may differ
-  } as any)
+  })
   if (error) {
     if ((error.message ?? '').toLowerCase().includes('duplicate')) {
       // Already restored — treat as success

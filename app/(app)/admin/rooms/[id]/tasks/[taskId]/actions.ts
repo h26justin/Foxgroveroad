@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth'
+import type { TablesUpdate } from '@/lib/supabase/database.types'
 
 /**
  * Parse the simplified `schedule` form field. It's either:
@@ -65,7 +66,7 @@ export async function updateTaskTemplate(formData: FormData) {
     redirect(`${back}?error=${encodeURIComponent(sched.error)}`)
   }
 
-  const updatePayload: any = {
+  const updatePayload: TablesUpdate<'task_templates'> = {
     room_id: newRoomId,
     name,
     frequency_days: sched.frequencyDays,

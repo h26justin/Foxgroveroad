@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { asSettingsMap } from '@/lib/house-settings'
+import { addDaysISO, todayISO } from '@/lib/dates'
 
 /**
  * Public arrival packet for a guest. Reached via a per-booking opaque
@@ -10,7 +11,13 @@ import { asSettingsMap } from '@/lib/house-settings'
  *
  * No cookies / no session. Service role client because the arrival
  * page is anonymous — calendar-app style.
+ *
+ * The link stops working ARRIVAL_LINK_GRACE_DAYS after check-out so the
+ * WiFi password and room details don't stay readable forever. The
+ * booker can issue a fresh link from My bookings if one leaks.
  */
+const ARRIVAL_LINK_GRACE_DAYS = 3
+
 export const dynamic = 'force-dynamic'
 
 export default async function ArrivalPacketPage({
@@ -38,7 +45,11 @@ export default async function ArrivalPacketPage({
     .maybeSingle()
 
   if (!booking) notFound()
-  const b = booking as any
+  const b = booking
+
+  if (todayISO() > addDaysISO(b.check_out, ARRIVAL_LINK_GRACE_DAYS)) {
+    return <ExpiredPacket />
+  }
 
   const [settingsRes, bedsRes] = await Promise.all([
     admin.from('house_settings').select('key, value'),
@@ -51,11 +62,11 @@ export default async function ArrivalPacketPage({
       .eq('status', 'approved'),
   ])
 
-  const settings = asSettingsMap((settingsRes.data as any[]) ?? [])
-  const beds = (bedsRes.data as any[]) ?? []
+  const settings = asSettingsMap(settingsRes.data ?? [])
+  const beds = bedsRes.data ?? []
 
   const requesterName: string =
-    (b.requester as any)?.full_name?.split(' ')[0] ?? 'guest'
+    b.requester?.full_name?.split(' ')[0] ?? 'guest'
 
   const checkInDate = new Date(b.check_in + 'T00:00:00')
   const checkOutDate = new Date(b.check_out + 'T00:00:00')
@@ -130,7 +141,7 @@ export default async function ArrivalPacketPage({
 
         {beds.length > 0 && (
           <Section title="Your rooms">
-            {beds.map((bed: any) => {
+            {beds.map((bed) => {
               const roomName = bed.beds?.rooms?.name ?? 'Room'
               const bedName = bed.beds?.name ?? 'bed'
               return (
@@ -249,5 +260,31 @@ function Paragraph({ children }: { children: React.ReactNode }) {
     >
       {children}
     </p>
+  )
+}
+
+function ExpiredPacket() {
+  return (
+    <main
+      style={{
+        background: 'var(--color-cream, #f7f1e8)',
+        minHeight: '100dvh',
+        padding:
+          'max(40px, env(safe-area-inset-top)) 16px max(40px, env(safe-area-inset-bottom))',
+      }}
+    >
+      <div className="max-w-md mx-auto text-center">
+        <h1
+          className="text-2xl mb-3"
+          style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-ink)' }}
+        >
+          This arrival link has expired
+        </h1>
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+          Arrival details are only available around the stay. If you&apos;re
+          visiting again, ask your host for a new link.
+        </p>
+      </div>
+    </main>
   )
 }

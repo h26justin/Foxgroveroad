@@ -28,7 +28,7 @@ export async function updateHouseSettings(formData: FormData) {
           value: u.value,
           updated_by: me.id,
           updated_at: new Date().toISOString(),
-        } as any,
+        },
         { onConflict: 'key' },
       )
     if (error) {

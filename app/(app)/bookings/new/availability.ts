@@ -57,8 +57,8 @@ export async function checkAvailability(
 
   const totalRooms = roomsRes.count ?? 0
   const occupied = new Set<string>()
-  for (const b of (overlapRes.data as any[]) ?? []) {
-    const roomId = (b.beds as any)?.room_id
+  for (const b of overlapRes.data ?? []) {
+    const roomId = b.beds?.room_id
     if (roomId) occupied.add(roomId)
   }
   const occupiedRooms = occupied.size

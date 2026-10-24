@@ -34,5 +34,5 @@ export const getUserPrefs = cache(async (userId: string): Promise<UserFeaturePre
     .maybeSingle()
   if (!data) return DEFAULT_USER_PREFS
   // Spread defaults so any future-added columns don't break old rows.
-  return { ...DEFAULT_USER_PREFS, ...(data as any) }
+  return { ...DEFAULT_USER_PREFS, ...data }
 })

@@ -1,4 +1,5 @@
 import { requireProfile } from '@/lib/auth'
+import { todayISO, addDaysISO } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
 import { getAllRoomStatuses } from '@/lib/room-status'
@@ -14,7 +15,9 @@ import {
   formatBinDate,
 } from '@/lib/bin-collections'
 import BinIcon from '../_bin-icon'
-import HousekeepingClient from './HousekeepingClient'
+import type { Tables } from '@/lib/supabase/database.types'
+import type { AttachmentWithUrl } from '@/lib/attachments'
+import HousekeepingClient, { type DueTask, type Room } from './HousekeepingClient'
 import LogHoursWidget from './LogHoursWidget'
 
 // 30s soft cache. Actions that mutate data call revalidatePath('/housekeeping')
@@ -34,13 +37,9 @@ export default async function HousekeepingPage({
     createClient(),
   ])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
   // 5-day window for pre-arrival prep
-  const fiveDaysOut = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + 5)
-    return d.toISOString().split('T')[0]
-  })()
+  const fiveDaysOut = addDaysISO(today, 5)
 
   // Seven queries fire in parallel.
   //
@@ -108,11 +107,7 @@ export default async function HousekeepingPage({
     // completions (template_id + completed_at_date) and reduce to a
     // map client-side. Limited to past 365 days to keep size bounded.
     (() => {
-      const yearAgo = (() => {
-        const d = new Date(today + 'T00:00:00')
-        d.setDate(d.getDate() - 365)
-        return d.toISOString().split('T')[0]
-      })()
+      const yearAgo = addDaysISO(today, -365)
       return supabase
         .from('task_completions')
         .select('task_template_id, completed_at_date')
@@ -126,11 +121,7 @@ export default async function HousekeepingPage({
       .select('id, name, location, frequency_days, notes, position')
       .order('position'),
     (() => {
-      const sixtyDaysAgo = (() => {
-        const d = new Date(today + 'T00:00:00')
-        d.setDate(d.getDate() - 60)
-        return d.toISOString().split('T')[0]
-      })()
+      const sixtyDaysAgo = addDaysISO(today, -60)
       return supabase
         .from('plant_waterings')
         .select('id, plant_id, watered_by, watered_at, watered_at_date')
@@ -145,7 +136,7 @@ export default async function HousekeepingPage({
 
   // Build map of task_template_id → most recent completion date
   const lastCompletedByTemplate = new Map<string, string>()
-  for (const c of (allCompletionsRes.data as any[]) ?? []) {
+  for (const c of allCompletionsRes.data ?? []) {
     if (!c.task_template_id) continue
     const existing = lastCompletedByTemplate.get(c.task_template_id)
     if (!existing || c.completed_at_date > existing) {
@@ -167,7 +158,7 @@ export default async function HousekeepingPage({
     room_name: string | null
     created_at: string
     created_by_name: string
-    photos: any[]
+    photos: AttachmentWithUrl[]
   }
   let oneshotTasks: OneshotRow[] = []
   if (isAdminOrCleaner && oneshotTasksEnabled) {
@@ -180,8 +171,8 @@ export default async function HousekeepingPage({
       .order('priority', { ascending: false }) // urgent first (urgent > normal alphabetically)
       .order('created_at', { ascending: false })
 
-    const oneshots = (oneshotRows as any[]) ?? []
-    let photosMap = new Map<string, any[]>()
+    const oneshots = oneshotRows ?? []
+    let photosMap = new Map<string, AttachmentWithUrl[]>()
     if (oneshots.length > 0) {
       // Reuse listAttachmentsForEntities pattern
       const { listAttachmentsForEntities } = await import(
@@ -199,9 +190,9 @@ export default async function HousekeepingPage({
         | 'normal'
         | 'urgent',
       room_id: o.room_id,
-      room_name: (o.rooms as any)?.name ?? null,
+      room_name: o.rooms?.name ?? null,
       created_at: o.created_at,
-      created_by_name: (o.creator as any)?.full_name ?? 'Admin',
+      created_by_name: o.creator?.full_name ?? 'Admin',
       photos: photosMap.get(o.id) ?? [],
     }))
   }
@@ -210,7 +201,9 @@ export default async function HousekeepingPage({
   // out tasks that have been completed recently enough that they
   // shouldn't be in the due/overdue list. Don't trust the view's status
   // alone — its computation can lag actual completions.
-  const dueRows = ((dueRowsRes.data as any[]) ?? [])
+  // The view's columns are all nullable in the generated types; the
+  // client's DueTask shape reflects what the view actually returns.
+  const dueRows = ((dueRowsRes.data ?? []) as unknown as DueTask[])
     .map((t) => {
       const real = lastCompletedByTemplate.get(t.id)
       if (!real) return t // nothing in completions, view's value stands
@@ -238,7 +231,7 @@ export default async function HousekeepingPage({
 
   // Build a per-room open-issues count from the open issues list.
   const openIssuesByRoom = new Map<string, number>()
-  for (const i of (openIssuesRes.data as any[]) ?? []) {
+  for (const i of openIssuesRes.data ?? []) {
     if (!i.room_id) continue
     openIssuesByRoom.set(i.room_id, (openIssuesByRoom.get(i.room_id) ?? 0) + 1)
   }
@@ -246,17 +239,24 @@ export default async function HousekeepingPage({
   for (const [k, v] of openIssuesByRoom) openIssuesCount[k] = v
 
   // Fetch existing pre-arrival checks for the request IDs we found.
-  const upcomingBookings = (upcomingBookingsRes.data as any[]) ?? []
+  const upcomingBookings = upcomingBookingsRes.data ?? []
   const upcomingRequestIds = Array.from(
-    new Set(upcomingBookings.map((b) => b.request_id).filter(Boolean))
+    new Set(
+      upcomingBookings
+        .map((b) => b.request_id)
+        .filter((id): id is string => Boolean(id))
+    )
   )
-  let checks: any[] = []
+  let checks: Pick<
+    Tables<'prearrival_checks'>,
+    'id' | 'booking_request_id' | 'template_id' | 'room_id'
+  >[] = []
   if (upcomingRequestIds.length > 0) {
     const { data: checksData } = await supabase
       .from('prearrival_checks')
       .select('id, booking_request_id, template_id, room_id')
       .in('booking_request_id', upcomingRequestIds)
-    checks = (checksData as any[]) ?? []
+    checks = checksData ?? []
   }
 
   // Build "soonest upcoming booking per room" — there can be multiple
@@ -274,7 +274,7 @@ export default async function HousekeepingPage({
     }
   >()
   for (const b of upcomingBookings) {
-    const roomId = (b.beds as any)?.room_id
+    const roomId = b.beds?.room_id
     const requestId = b.request_id
     if (!roomId || !requestId) continue
     const existing = soonestPerRoom.get(roomId)
@@ -285,7 +285,7 @@ export default async function HousekeepingPage({
         check_in: b.check_in,
         check_out: b.check_out,
         guest_name: b.guest_name,
-        requester_name: (b.profiles as any)?.full_name ?? null,
+        requester_name: b.profiles?.full_name ?? null,
       })
     }
   }
@@ -303,7 +303,7 @@ export default async function HousekeepingPage({
     }
   > = {}
 
-  const allTemplates = (prearrivalTemplatesRes.data as any[]) ?? []
+  const allTemplates = prearrivalTemplatesRes.data ?? []
   for (const [roomId, info] of soonestPerRoom) {
     const templates = allTemplates
       .filter((t) => t.room_id === roomId)
@@ -329,8 +329,8 @@ export default async function HousekeepingPage({
 
   // v34: derive plant statuses
   const annotatedPlants = annotatePlants(
-    ((plantsRes.data as any[]) ?? []) as Plant[],
-    ((plantWateringsRes.data as any[]) ?? []) as PlantWatering[],
+    (plantsRes.data ?? []) as Plant[],
+    (plantWateringsRes.data ?? []) as PlantWatering[],
     today,
   )
 
@@ -368,9 +368,9 @@ export default async function HousekeepingPage({
       )}
       <HousekeepingClient
       dueTasks={dueRows}
-      completions={(completionsRes.data as any[]) ?? []}
-      rooms={(roomsRes.data as any[]) ?? []}
-      roomOrder={(roomOrderRes.data as any[]) ?? []}
+      completions={completionsRes.data ?? []}
+      rooms={(roomsRes.data ?? []) as Room[]}
+      roomOrder={roomOrderRes.data ?? []}
       openIssuesCount={openIssuesCount}
       prearrivalByRoom={prearrivalByRoom}
       oneshotTasks={oneshotTasks}

@@ -16,7 +16,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { todayISO, formatDate, nightsBetween } from '@/lib/dates'
+import { todayISO, addDaysISO, formatDate, nightsBetween } from '@/lib/dates'
 import { floorLabelShort } from '@/lib/floors'
 import PrintButton from './PrintButton'
 
@@ -33,16 +33,10 @@ export default async function OverviewPage() {
   const today = todayISO()
   const days: string[] = []
   for (let i = 0; i < WINDOW_DAYS; i++) {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + i)
-    days.push(d.toISOString().split('T')[0])
+    days.push(addDaysISO(today, i))
   }
   const windowEnd = days[days.length - 1] // last day inclusive
-  const windowEndExclusive = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + WINDOW_DAYS)
-    return d.toISOString().split('T')[0]
-  })()
+  const windowEndExclusive = addDaysISO(today, WINDOW_DAYS)
 
   const supabase = await createClient()
 
@@ -70,8 +64,8 @@ export default async function OverviewPage() {
       .order('check_in'),
   ])
 
-  const rooms = (roomsRes.data as any[]) ?? []
-  const bookings = (bookingsRes.data as any[]) ?? []
+  const rooms = roomsRes.data ?? []
+  const bookings = bookingsRes.data ?? []
 
   // Collect unique request IDs that touch the window — used for guest
   // and prearrival lookups
@@ -90,14 +84,14 @@ export default async function OverviewPage() {
             )
             .in('request_id', requestIds)
             .order('position')
-        : Promise.resolve({ data: [] } as any),
+        : Promise.resolve({ data: [] }),
       requestIds.length > 0
         ? supabase
             .from('booking_request_children')
             .select('request_id, age_band, sleep_arrangement, position')
             .in('request_id', requestIds)
             .order('position')
-        : Promise.resolve({ data: [] } as any),
+        : Promise.resolve({ data: [] }),
       supabase
         .from('prearrival_templates')
         .select('id, room_id, name, position')
@@ -107,19 +101,23 @@ export default async function OverviewPage() {
             .from('prearrival_checks')
             .select('booking_request_id, template_id, room_id')
             .in('booking_request_id', requestIds)
-        : Promise.resolve({ data: [] } as any),
+        : Promise.resolve({ data: [] }),
     ])
 
-  const guestRows = (guestsRes.data as any[]) ?? []
-  const childRows = (childrenRes.data as any[]) ?? []
-  const prearrivalTemplates = (prearrivalTemplatesRes.data as any[]) ?? []
-  const prearrivalChecks = (prearrivalChecksRes.data as any[]) ?? []
+  const guestRows = guestsRes.data ?? []
+  const childRows = childrenRes.data ?? []
+  const prearrivalTemplates = prearrivalTemplatesRes.data ?? []
+  const prearrivalChecks = prearrivalChecksRes.data ?? []
+
+  type OverviewBooking = (typeof bookings)[number]
+  type RoomBooking = OverviewBooking & { room_id: string }
+  type ChildRow = (typeof childRows)[number]
 
   // ─── Index data ──────────────────────────────────────────────────
   // Bookings keyed by room — for grid + per-room sections
-  const bookingsByRoom = new Map<string, any[]>()
+  const bookingsByRoom = new Map<string, RoomBooking[]>()
   for (const b of bookings) {
-    const roomId = (b.beds as any)?.room_id
+    const roomId = b.beds?.room_id
     if (!roomId) continue
     const list = bookingsByRoom.get(roomId) ?? []
     list.push({ ...b, room_id: roomId })
@@ -130,13 +128,13 @@ export default async function OverviewPage() {
   const guestsByRequest = new Map<string, string[]>()
   for (const g of guestRows) {
     const list = guestsByRequest.get(g.request_id) ?? []
-    const name = (g.guests as any)?.full_name
+    const name = g.guests?.full_name
     if (name) list.push(name)
     guestsByRequest.set(g.request_id, list)
   }
 
   // Children keyed by request
-  const childrenByRequest = new Map<string, any[]>()
+  const childrenByRequest = new Map<string, ChildRow[]>()
   for (const c of childRows) {
     const list = childrenByRequest.get(c.request_id) ?? []
     list.push(c)
@@ -166,7 +164,7 @@ export default async function OverviewPage() {
   // Key: roomId|day → array of unique request labels
   const gridCells = new Map<string, Set<string>>()
   for (const b of bookings) {
-    const roomId = (b.beds as any)?.room_id
+    const roomId = b.beds?.room_id
     if (!roomId) continue
     const label = labelForBooking(b)
     for (const day of days) {
@@ -182,10 +180,10 @@ export default async function OverviewPage() {
   // ─── Per-room sections: bookings per room, grouped by request ────
   type RequestGroup = {
     requestId: string
-    bookings: any[] // multiple beds in same room, same request
-    request: any // the request row (notes, adults, children, requester)
+    bookings: RoomBooking[] // multiple beds in same room, same request
+    request: OverviewBooking['request'] // the request row (notes, adults, children, requester)
     guests: string[]
-    children: any[]
+    children: ChildRow[]
     prearrivalDone: number
     prearrivalTotal: number
   }
@@ -194,7 +192,7 @@ export default async function OverviewPage() {
   for (const room of rooms) {
     const roomBookings = bookingsByRoom.get(room.id) ?? []
     // Group by request_id
-    const byRequest = new Map<string, any[]>()
+    const byRequest = new Map<string, RoomBooking[]>()
     for (const b of roomBookings) {
       const rid = b.request_id ?? `__solo_${b.id}`
       const list = byRequest.get(rid) ?? []
@@ -203,7 +201,7 @@ export default async function OverviewPage() {
     }
     const groups: RequestGroup[] = []
     for (const [requestId, bs] of byRequest.entries()) {
-      const request = (bs[0]?.request as any) ?? null
+      const request = bs[0]?.request ?? null
       const guests = guestsByRequest.get(requestId) ?? []
       const children = childrenByRequest.get(requestId) ?? []
       const prearrivalTotal = prearrivalTemplateCountByRoom.get(room.id) ?? 0
@@ -242,7 +240,7 @@ export default async function OverviewPage() {
   >()
   for (const b of bookings) {
     const requestId = b.request_id ?? `__solo_${b.id}`
-    const room = rooms.find((r) => r.id === (b.beds as any)?.room_id)
+    const room = rooms.find((r) => r.id === b.beds?.room_id)
     const roomName = room?.name ?? '—'
     const label = labelForBooking(b)
 
@@ -427,7 +425,7 @@ export default async function OverviewPage() {
                     >
                       {room.is_owner_room
                         ? 'owner only'
-                        : floorLabelShort(room.floor)}
+                        : floorLabelShort(room.floor ?? 0)}
                     </div>
                   </td>
                   {days.map((d) => {
@@ -477,7 +475,7 @@ export default async function OverviewPage() {
                         className="ov-meta"
                         style={{ marginLeft: 10, fontSize: 11 }}
                       >
-                        {floorLabelShort(room.floor)}
+                        {floorLabelShort(room.floor ?? 0)}
                         {' · '}
                         {groups.length} booking{groups.length === 1 ? '' : 's'}
                       </span>
@@ -488,12 +486,12 @@ export default async function OverviewPage() {
                       const checkOut = firstBooking?.check_out ?? ''
                       const nights = nightsBetween(checkIn, checkOut)
                       const requesterName =
-                        (g.request?.profiles as any)?.full_name ?? '—'
+                        g.request?.profiles?.full_name ?? '—'
                       const adults = g.request?.adults ?? 0
                       const childCount =
                         g.request?.children ?? g.children.length
                       const bedNames = g.bookings
-                        .map((b: any) => (b.beds as any)?.name)
+                        .map((b) => b.beds?.name)
                         .filter(Boolean)
                       return (
                         <div className="ov-booking" key={g.requestId}>
@@ -552,7 +550,7 @@ export default async function OverviewPage() {
                               Children:{' '}
                               {g.children
                                 .map(
-                                  (c: any) =>
+                                  (c) =>
                                     `${c.age_band ?? '?'}${
                                       c.sleep_arrangement
                                         ? ` (${c.sleep_arrangement})`
@@ -678,12 +676,15 @@ export default async function OverviewPage() {
 // ─── Helpers ────────────────────────────────────────────────────────
 
 /** Human label for a booking — guest_name first, requester first name as fallback. */
-function labelForBooking(b: any): string {
+function labelForBooking(b: {
+  guest_name: string | null
+  request: { profiles: { full_name: string } | null } | null
+}): string {
   if (b.guest_name) {
     // Show first name only for compactness in the grid
     return String(b.guest_name).split(' ')[0]
   }
-  const requester = (b.request as any)?.profiles?.full_name
+  const requester = b.request?.profiles?.full_name
   if (requester) return String(requester).split(' ')[0]
   return 'Guest'
 }

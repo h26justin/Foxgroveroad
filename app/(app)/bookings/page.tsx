@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDateRange, relativeFromToday, todayISO } from '@/lib/dates'
 import CancelBookingButton from './CancelBookingButton'
 import ArrivalLinkButton from './ArrivalLinkButton'
+import { regenerateArrivalToken } from './arrival-actions'
 
 // 30s soft cache — mutations call revalidatePath('/bookings') so the
 // owner of the change sees it immediately.
@@ -26,14 +27,19 @@ type BedAssignment = { room_name: string; bed_label: string; guest_name: string 
 export default async function BookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; cancelled?: string }>
+  searchParams: Promise<{
+    success?: string
+    cancelled?: string
+    saved?: string
+    error?: string
+  }>
 }) {
   const [profile, supabase, sp] = await Promise.all([
     requireProfile(),
     createClient(),
     searchParams,
   ])
-  const { success, cancelled } = sp
+  const { success, cancelled, saved, error } = sp
   const isAdmin = profile.role === 'admin'
 
   // All my requests, newest first by check-in date
@@ -59,7 +65,7 @@ export default async function BookingsPage({
           )
           .in('request_id', requestIds)
           .order('position')
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as never[] }),
     requestIds.length > 0
       ? supabase
           .from('bookings')
@@ -68,16 +74,16 @@ export default async function BookingsPage({
           )
           .in('request_id', requestIds)
           .eq('status', 'approved')
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as never[] }),
   ])
 
   // Build per-request guest list
   const guestsByRequest = new Map<string, GuestEntry[]>()
-  for (const r of (brgRes.data as any[]) ?? []) {
+  for (const r of brgRes.data ?? []) {
     if (!r.guests) continue
     const list = guestsByRequest.get(r.request_id) ?? []
     list.push({
-      full_name: (r.guests as any).full_name ?? '(deleted guest)',
+      full_name: r.guests.full_name ?? '(deleted guest)',
       position: r.position ?? 0,
     })
     guestsByRequest.set(r.request_id, list)
@@ -88,11 +94,14 @@ export default async function BookingsPage({
 
   // Build per-request bed assignment list
   const bedsByRequest = new Map<string, BedAssignment[]>()
-  for (const b of (bedsRes.data as any[]) ?? []) {
+  for (const b of bedsRes.data ?? []) {
+    // request_id is nullable in the schema but the .in() filter above
+    // guarantees it's set on every row here.
+    if (!b.request_id) continue
     const list = bedsByRequest.get(b.request_id) ?? []
     list.push({
-      room_name: (b.beds as any)?.rooms?.name ?? '(deleted room)',
-      bed_label: (b.beds as any)?.name ?? '?',
+      room_name: b.beds?.rooms?.name ?? '(deleted room)',
+      bed_label: b.beds?.name ?? '?',
       guest_name: b.guest_name ?? null,
     })
     bedsByRequest.set(b.request_id, list)
@@ -144,6 +153,12 @@ export default async function BookingsPage({
           Request submitted. You&apos;ll get an update once it&apos;s reviewed.
         </div>
       )}
+      {saved && (
+        <div className="fg-msg-success mb-6">
+          New arrival link made — the old one no longer works.
+        </div>
+      )}
+      {error && <div className="fg-msg-error mb-6">{error}</div>}
       {cancelled && (
         <div className="fg-msg-success mb-6">Request cancelled.</div>
       )}
@@ -375,7 +390,20 @@ function RequestCard({
               a token (backfilled by 07_arrival_packet.sql for existing
               approvals). */}
           {request.status === 'approved' && request.arrival_token && (
-            <ArrivalLinkButton token={request.arrival_token} />
+            <>
+              <ArrivalLinkButton token={request.arrival_token} />
+              <form action={regenerateArrivalToken}>
+                <input type="hidden" name="request_id" value={request.id} />
+                <button
+                  type="submit"
+                  className="fg-btn-ghost text-xs"
+                  style={{ width: 'auto', padding: '6px 12px' }}
+                  title="Make a new arrival link. The old one stops working — use this if a link was shared with the wrong person."
+                >
+                  ↻ New link
+                </button>
+              </form>
+            </>
           )}
 
           {canCancel && (

@@ -125,22 +125,22 @@ export default async function AdminRoomDetailPage({
           .eq('room_type', 'bedroom')
           .eq('is_owner_room', false)
           .order('name')
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] }),
     room.manual_turnover_at && turnoverTaskIds.length > 0
       ? supabase
           .from('task_completions')
           .select('task_template_id')
           .gte('completed_at', room.manual_turnover_at)
           .in('task_template_id', turnoverTaskIds)
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] }),
   ])
-  const bedroomOptions = (bedroomsRes.data as any[]) ?? []
+  const bedroomOptions = bedroomsRes.data ?? []
 
   // Is a manual turnover currently active?
   let manualTurnoverActive = false
   if (room.manual_turnover_at && turnoverTaskIds.length > 0) {
     const tickedSet = new Set(
-      ((completionsRes.data as any[]) ?? []).map((c) => c.task_template_id)
+      (completionsRes.data ?? []).map((c) => c.task_template_id)
     )
     manualTurnoverActive = turnoverTaskIds.some((id) => !tickedSet.has(id))
   }
@@ -172,7 +172,7 @@ export default async function AdminRoomDetailPage({
           className="text-sm fg-mono mt-2"
           style={{ color: 'var(--color-muted)' }}
         >
-          {floorLabel(room.floor)} ·{' '}
+          {floorLabel(room.floor ?? 0)} ·{' '}
           {typeMeta.label} · {taskList.length} task
           {taskList.length === 1 ? '' : 's'}
           {scheduledCount > 0 &&
@@ -208,7 +208,7 @@ export default async function AdminRoomDetailPage({
                 style={{ color: 'var(--color-muted)' }}
               >
                 Used to warn admins when a guest needs a cot but the room
-                they're assigned to is too small for one.
+                they&apos;re assigned to is too small for one.
               </div>
             </div>
             <form action={toggleRoomCotCapacity} className="flex gap-2">

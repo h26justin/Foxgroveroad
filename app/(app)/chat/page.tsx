@@ -27,13 +27,13 @@ export default async function ChatPage() {
     .order('created_at', { ascending: false })
     .limit(200)
 
-  const messages = ((rows as any[]) ?? []).map((m) => ({
-    id: m.id as string,
-    body: m.body as string,
-    author_id: m.author_id as string,
-    author_name: (m.author as any)?.full_name ?? 'Someone',
-    author_role: (m.author as any)?.role ?? 'family',
-    created_at: m.created_at as string,
+  const messages = (rows ?? []).map((m) => ({
+    id: m.id,
+    body: m.body,
+    author_id: m.author_id,
+    author_name: m.author?.full_name ?? 'Someone',
+    author_role: m.author?.role ?? 'family',
+    created_at: m.created_at,
   }))
 
   return (

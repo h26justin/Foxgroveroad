@@ -1,0 +1,17 @@
+{
+  "name": "foxgrove-heating-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relays the Heatmiser neoHub (LAN-only) to the Foxgrove Road app",
+  "type": "module",
+  "main": "relay.mjs",
+  "scripts": {
+    "start": "node --env-file=relay.env relay.mjs"
+  },
+  "engines": {
+    "node": ">=20.6"
+  },
+  "dependencies": {
+    "ws": "^8.18.2"
+  }
+}

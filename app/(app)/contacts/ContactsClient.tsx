@@ -87,7 +87,7 @@ export default function ContactsClient({
             className="text-sm fg-mono"
             style={{ color: 'var(--color-muted)' }}
           >
-            Plumber, electrician, neighbour — the people you'll want at
+            Plumber, electrician, neighbour — the people you&apos;ll want at
             9pm when something breaks.
           </p>
         </div>

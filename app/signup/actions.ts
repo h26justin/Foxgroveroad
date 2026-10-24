@@ -6,8 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
- * Self-signup. Creates the auth user, then forces their profile role
- * to 'pending' so they can't see anything until an admin approves them.
+ * Self-signup. Creates the auth user; the database trigger gives them
+ * role 'pending' so they can't see anything until an admin approves them.
  *
  * Notifies all admins via push notification so a fresh signup can be
  * actioned promptly. Push failures don't block the signup — the worst
@@ -37,58 +37,33 @@ export async function signup(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent(error.message)}`)
   }
 
-  // Force role to 'pending' on the profile. We use the admin client
-  // (service role) here because the user is freshly signed up and may
-  // not be able to update their own role under standard RLS — and
-  // also because the on-auth-insert trigger may have set the default
-  // role to 'family' before we get a chance.
+  // The on-auth-insert trigger (handle_new_user, db/12) creates the
+  // profile with role='pending', so there's nothing to lock down here —
+  // and nothing that can fail open. Just tell the admins.
   //
-  // Upsert covers both branches: trigger ran (we update) or didn't
-  // (we insert). Either way the row ends up with role='pending'.
-  const userId = data.user?.id
-  if (userId) {
+  // Push failures are swallowed: the user should still land on
+  // /awaiting-approval cleanly, and the admin will see the pending row
+  // on the Team page anyway.
+  if (data.user?.id) {
     try {
       const admin = createAdminClient()
-      await admin
+      const { sendPushToUsers } = await import('@/lib/push')
+      const { data: admins } = await admin
         .from('profiles')
-        .upsert(
-          {
-            id: userId,
-            full_name: fullName,
-            role: 'pending',
-          } as any,
-          { onConflict: 'id' },
-        )
-
-      // Notify all admins via push. Wrapped in its own try/catch so a
-      // push failure can't block the signup — the user should still be
-      // able to land on /awaiting-approval cleanly.
-      try {
-        const { sendPushToUsers } = await import('@/lib/push')
-        const { data: admins } = await admin
-          .from('profiles')
-          .select('id')
-          .eq('role', 'admin')
-          .eq('is_deleted', false)
-        const adminIds = (admins as any[] | null)?.map((a) => a.id) ?? []
-        if (adminIds.length > 0) {
-          await sendPushToUsers(adminIds, {
-            title: 'New signup awaiting approval',
-            body: `${fullName} (${email}) just signed up. Tap to review.`,
-            url: '/admin/team',
-            tag: 'pending-signup',
-          })
-        }
-      } catch (pushErr) {
-        console.error('[signup] Push notification failed:', pushErr)
+        .select('id')
+        .eq('role', 'admin')
+        .eq('is_deleted', false)
+      const adminIds = (admins ?? []).map((a: { id: string }) => a.id)
+      if (adminIds.length > 0) {
+        await sendPushToUsers(adminIds, {
+          title: 'New signup awaiting approval',
+          body: `${fullName} (${email}) just signed up. Tap to review.`,
+          url: '/admin/team',
+          tag: 'pending-signup',
+        })
       }
-    } catch (profileErr) {
-      // If we can't lock down the role, log loudly but don't block the
-      // signup — the (app)/layout role check will still keep them out
-      // of authed pages because their role won't be 'admin'/'cleaner'/
-      // 'family' until manually set. The DB CHECK constraint also
-      // wouldn't accept a role outside the allow-list.
-      console.error('[signup] Failed to set pending role:', profileErr)
+    } catch (pushErr) {
+      console.error('[signup] Push notification failed:', pushErr)
     }
   }
 

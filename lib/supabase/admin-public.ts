@@ -1,5 +1,6 @@
 import 'server-only'
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from './database.types'
 
 /**
  * A second admin client used ONLY for sending auth emails (password
@@ -40,7 +41,7 @@ export function createAdminPublicClient() {
     )
   }
 
-  return createClient(url, serviceKey, {
+  return createClient<Database>(url, serviceKey, {
     auth: {
       flowType: 'implicit',
       autoRefreshToken: false,

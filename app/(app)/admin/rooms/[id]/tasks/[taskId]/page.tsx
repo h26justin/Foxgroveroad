@@ -185,7 +185,7 @@ export default async function AdminTaskEditPage({
             ))}
           </select>
           <p className="fg-helptext">
-            "On turnaround" means the task fires when a guest checks out and a
+            &quot;On turnaround&quot; means the task fires when a guest checks out and a
             new one is due — sheets, towels, etc. Everything else repeats on
             its day count.
           </p>
@@ -197,7 +197,7 @@ export default async function AdminTaskEditPage({
           <select
             id="edit-room"
             name="room_id"
-            defaultValue={task.room_id}
+            defaultValue={task.room_id ?? undefined}
             className="fg-input"
           >
             {(allRooms ?? []).map((r) => {

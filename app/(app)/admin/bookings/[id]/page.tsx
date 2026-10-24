@@ -9,6 +9,12 @@ import {
 } from '@/lib/dates'
 import { cancelBooking } from './actions'
 
+type SiblingBooking = {
+  id: string
+  status: string
+  beds: { name: string; rooms: { name: string } | null } | null
+}
+
 export default async function BookingDetailPage({
   params,
   searchParams,
@@ -42,12 +48,12 @@ export default async function BookingDetailPage({
 
   if (!booking) notFound()
 
-  const bed: any = booking.beds
-  const room: any = bed?.rooms
-  const requester: any = booking.profiles
+  const bed = booking.beds
+  const room = bed?.rooms
+  const requester = booking.profiles
 
   // Sibling beds in the same booking_request (so admin sees the full party)
-  let siblings: any[] = []
+  let siblings: SiblingBooking[] = []
   if (booking.request_id) {
     const { data: sibs } = await supabase
       .from('bookings')
@@ -157,8 +163,8 @@ export default async function BookingDetailPage({
           </div>
           <ul className="space-y-2">
             {siblings.map((s) => {
-              const sBed: any = s.beds
-              const sRoom: any = sBed?.rooms
+              const sBed = s.beds
+              const sRoom = sBed?.rooms
               return (
                 <li key={s.id} className="flex items-center justify-between">
                   <div>

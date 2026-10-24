@@ -39,6 +39,7 @@ export default function FinishLoginPage() {
       const params = new URLSearchParams(window.location.hash.slice(1))
       const err = params.get('error_description') ?? params.get('error')
       if (err) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL fragment only exists client-side, so it must be read after mount (not during SSR/hydration)
         setErrorMsg(err.replace(/\+/g, ' '))
         setChecking(false)
         return

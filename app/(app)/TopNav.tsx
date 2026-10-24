@@ -185,6 +185,14 @@ export default function TopNav({
         match: '/pay',
       })
     }
+    if (flagOn('heating')) {
+      adminItems.push({
+        href: '/admin/heating',
+        label: 'Heating',
+        icon: '🔥',
+        match: '/admin/heating',
+      })
+    }
     adminItems.push({
       href: '/admin/house-info',
       label: 'House info',
@@ -320,9 +328,13 @@ function MoreMenu({
     }
   }, [open])
 
-  useEffect(() => {
+  // Close the menu on navigation. Adjusting state during render (rather
+  // than in an effect) avoids an extra render pass with a stale menu.
+  const [prevPathname, setPrevPathname] = useState(pathname)
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname)
     setOpen(false)
-  }, [pathname])
+  }
 
   const containsActive =
     sectionItems.some(

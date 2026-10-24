@@ -147,7 +147,7 @@ export default function NewBookingClient({
       name,
       matchedGuestId: match?.id ?? null,
       // If we just matched an existing guest, reset link picker
-      linkProfileId: match ? null : undefined as any,
+      linkProfileId: match ? null : undefined,
     })
   }
 
@@ -164,7 +164,12 @@ export default function NewBookingClient({
     // Build payload entries. Per-row room hints (v43) are sent alongside
     // each guest so the server can chain bed assignment in one pass.
     const guestsPayload = validRows.map((r) => {
-      const base: any = r.matchedGuestId
+      const base: {
+        guest_id?: string
+        full_name?: string
+        link_profile_id?: string
+        room_id?: string
+      } = r.matchedGuestId
         ? { guest_id: r.matchedGuestId }
         : r.linkProfileId
           ? { full_name: r.name.trim(), link_profile_id: r.linkProfileId }

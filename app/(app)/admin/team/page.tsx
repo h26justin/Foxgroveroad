@@ -1,7 +1,7 @@
 import { requireAdmin } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { setUserRole, toggleCleanerActive, linkCleanerProfile, approvePendingUser } from './actions'
+import { setUserRole, toggleCleanerActive, linkCleanerProfile } from './actions'
 import InvitePersonForm from './InvitePersonForm'
 import UserActionsRow from './UserActionsRow'
 import PendingUserRow from './PendingUserRow'
@@ -34,35 +34,7 @@ export default async function AdminTeamPage({
   const profiles = profilesRes.data
   const cleaners = cleanersRes.data
 
-  // Enrich profiles with email + last_sign_in_at + banned state from
-  // auth.users (only readable via service-role admin client).
-  const authMeta = new Map<
-    string,
-    { email: string | null; lastSignIn: string | null; banned: boolean }
-  >()
-  try {
-    const admin = createAdminClient()
-    // listUsers is paginated; default is 50 per page which is plenty
-    // for this house. Bump perPage if you ever invite more.
-    const { data: usersPage } = await admin.auth.admin.listUsers({
-      perPage: 200,
-    })
-    for (const u of usersPage?.users ?? []) {
-      const banned =
-        !!(u as any).banned_until &&
-        new Date((u as any).banned_until).getTime() > Date.now()
-      authMeta.set(u.id, {
-        email: u.email ?? null,
-        lastSignIn: (u as any).last_sign_in_at ?? null,
-        banned,
-      })
-    }
-  } catch (err) {
-    // If the admin client throws (missing service role key, etc.) we
-    // still render the page with the data we have. The action buttons
-    // will explain themselves with a missing-email tooltip.
-    console.error('Failed to load auth metadata:', err)
-  }
+  const authMeta = await loadAuthMeta()
 
   // Split profiles by role: pending users get their own section above
   // the main people list (v30).
@@ -73,18 +45,6 @@ export default async function AdminTeamPage({
   const linkableProfiles = activeProfiles.filter(
     (p) => p.role === 'cleaner' || p.role === 'family'
   )
-
-  function fmtRelative(iso: string | null): string {
-    if (!iso) return 'never'
-    const ms = Date.now() - new Date(iso).getTime()
-    const days = Math.floor(ms / 86400000)
-    if (days < 1) return 'today'
-    if (days === 1) return 'yesterday'
-    if (days < 7) return `${days}d ago`
-    if (days < 30) return `${Math.floor(days / 7)}w ago`
-    if (days < 365) return `${Math.floor(days / 30)}mo ago`
-    return `${Math.floor(days / 365)}y ago`
-  }
 
   return (
     <div>
@@ -134,8 +94,8 @@ export default async function AdminTeamPage({
             className="text-xs fg-mono mb-4"
             style={{ color: 'var(--color-muted)' }}
           >
-            People who signed up themselves. They can't see anything in
-            the app until you approve them. Reject if you don't recognise
+            People who signed up themselves. They can&apos;t see anything in
+            the app until you approve them. Reject if you don&apos;t recognise
             the name — it removes them from the list and frees the email.
           </p>
           <div className="space-y-3">
@@ -284,7 +244,7 @@ export default async function AdminTeamPage({
           link them to their account so they can access the cleaner view.
         </p>
         <div className="space-y-3">
-          {(cleaners ?? []).map((c: any) => (
+          {(cleaners ?? []).map((c) => (
             <div key={c.id} className="fg-card p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -302,7 +262,7 @@ export default async function AdminTeamPage({
                     style={{ color: 'var(--color-muted)' }}
                   >
                     {c.profile_id
-                      ? `linked to: ${(c.profiles as any)?.full_name ?? '—'}`
+                      ? `linked to: ${c.profiles?.full_name ?? '—'}`
                       : 'not linked to an account yet'}
                     {' · '}
                     {c.is_active ? 'active' : 'inactive'}
@@ -353,4 +313,54 @@ export default async function AdminTeamPage({
       </section>
     </div>
   )
+}
+
+type AuthMeta = {
+  email: string | null
+  lastSignIn: string | null
+  banned: boolean
+}
+
+/**
+ * Enrich profiles with email + last_sign_in_at + banned state from
+ * auth.users (only readable via service-role admin client).
+ */
+async function loadAuthMeta(): Promise<Map<string, AuthMeta>> {
+  const authMeta = new Map<string, AuthMeta>()
+  try {
+    const admin = createAdminClient()
+    // listUsers is paginated; default is 50 per page which is plenty
+    // for this house. Bump perPage if you ever invite more.
+    const { data: usersPage } = await admin.auth.admin.listUsers({
+      perPage: 200,
+    })
+    for (const u of usersPage?.users ?? []) {
+      const banned =
+        !!u.banned_until &&
+        new Date(u.banned_until).getTime() > Date.now()
+      authMeta.set(u.id, {
+        email: u.email ?? null,
+        lastSignIn: u.last_sign_in_at ?? null,
+        banned,
+      })
+    }
+  } catch (err) {
+    // If the admin client throws (missing service role key, etc.) we
+    // still render the page with the data we have. The action buttons
+    // will explain themselves with a missing-email tooltip.
+    console.error('Failed to load auth metadata:', err)
+  }
+  return authMeta
+}
+
+function fmtRelative(iso: string | null): string {
+  if (!iso) return 'never'
+  const ms = Date.now() - new Date(iso).getTime()
+  const days = Math.floor(ms / 86400000)
+  if (days < 1) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
 }

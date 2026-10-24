@@ -55,7 +55,7 @@ export default async function AuditPage({
   if (filter) query = query.eq('action', filter)
 
   const { data: events } = await query
-  const rows = (events as any[]) ?? []
+  const rows = events ?? []
 
   const allActions = Array.from(
     new Set(rows.map((r) => r.action as string)),
@@ -120,7 +120,7 @@ export default async function AuditPage({
       ) : (
         <div className="space-y-2">
           {rows.map((r) => {
-            const actorName = (r.actor as any)?.full_name ?? 'Unknown actor'
+            const actorName = r.actor?.full_name ?? 'Unknown actor'
             const label = ACTION_LABELS[r.action] ?? r.action
             const icon = ACTION_ICONS[r.action] ?? '•'
             const payload = r.payload ?? {}

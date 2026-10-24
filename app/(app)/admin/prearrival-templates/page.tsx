@@ -34,7 +34,7 @@ export default async function PrearrivalTemplatesPage({
   const rooms = roomsRes.data
   const templates = templatesRes.data
 
-  const templatesByRoom = new Map<string, any[]>()
+  const templatesByRoom = new Map<string, NonNullable<typeof templates>>()
   for (const t of templates ?? []) {
     if (!templatesByRoom.has(t.room_id)) templatesByRoom.set(t.room_id, [])
     templatesByRoom.get(t.room_id)!.push(t)

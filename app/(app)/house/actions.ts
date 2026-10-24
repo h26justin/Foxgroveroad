@@ -175,12 +175,14 @@ export async function editRequestDates(
     .eq('request_id', requestId)
   if (cbErr) return { error: cbErr.message }
 
-  const bedIds = (childBookings ?? []).map((b: any) => b.bed_id).filter(Boolean)
+  const bedIds = (childBookings ?? [])
+    .map((b) => b.bed_id)
+    .filter((id): id is string => Boolean(id))
 
   // Conflict check: any other approved booking on the same beds that
   // overlaps the new date range, excluding our own bookings.
   if (bedIds.length > 0) {
-    const ourBookingIds = new Set((childBookings ?? []).map((b: any) => b.id))
+    const ourBookingIds = new Set((childBookings ?? []).map((b) => b.id))
     const { data: overlapping, error: confErr } = await supabase
       .from('bookings')
       .select(
@@ -192,10 +194,10 @@ export async function editRequestDates(
       .gt('check_out', newCheckIn)
     if (confErr) return { error: confErr.message }
     const conflicts = (overlapping ?? []).filter(
-      (b: any) => !ourBookingIds.has(b.id)
+      (b) => !ourBookingIds.has(b.id)
     )
     if (conflicts.length > 0) {
-      const c = conflicts[0] as any
+      const c = conflicts[0]
       const bedName = c.beds?.name ?? 'a bed'
       const who = c.guest_name ?? 'another guest'
       return {
@@ -286,7 +288,7 @@ export async function createBookingForUser(
   if (targetErr || !targetProfile) {
     return { error: 'That user account no longer exists.' }
   }
-  if ((targetProfile as any).role === 'pending') {
+  if (targetProfile.role === 'pending') {
     return { error: 'That user is still awaiting approval.' }
   }
 
@@ -355,12 +357,14 @@ export async function deleteBookingPermanently(
     { table: 'bookings', col: 'request_id' },
     { table: 'booking_request_children', col: 'request_id' },
     { table: 'prearrival_checks', col: 'booking_request_id' },
-  ]
+  ] as const
   for (const t of tablesToWipe) {
+    // The typed client can't resolve a union of table names, so narrow
+    // to one representative table — every entry has a uuid FK column.
     const { error: dErr } = await supabase
-      .from(t.table)
+      .from(t.table as 'bookings')
       .delete()
-      .eq(t.col, requestId)
+      .eq(t.col as 'request_id', requestId)
     if (dErr) {
       return { error: `Failed to clear ${t.table}: ${dErr.message}` }
     }
@@ -441,8 +445,8 @@ export async function createBookingWithGuests(
 
   // Parse guest list
   type GuestEntry =
-    | { guest_id: string }
-    | { full_name: string; link_profile_id?: string }
+    | { guest_id: string; room_id?: string | null }
+    | { full_name: string; link_profile_id?: string; room_id?: string | null }
   let guests: GuestEntry[]
   try {
     guests = JSON.parse(guestsJson) as GuestEntry[]
@@ -472,8 +476,8 @@ export async function createBookingWithGuests(
   const slots: Slot[] = []
   for (const entry of guests) {
     const roomId =
-      'room_id' in entry && (entry as any).room_id
-        ? ((entry as any).room_id as string)
+      'room_id' in entry && entry.room_id
+        ? entry.room_id
         : null
     if ('guest_id' in entry && entry.guest_id) {
       slots.push({ kind: 'existing', guestId: entry.guest_id, roomId })
@@ -493,13 +497,20 @@ export async function createBookingWithGuests(
   }
 
   const existingIds = Array.from(
-    new Set(slots.filter((s) => s.kind === 'existing').map((s) => (s as any).guestId as string)),
+    new Set(
+      slots
+        .filter((s): s is Extract<Slot, { kind: 'existing' }> => s.kind === 'existing')
+        .map((s) => s.guestId),
+    ),
   )
   const linkProfileIds = Array.from(
     new Set(
       slots
-        .filter((s) => s.kind === 'new' && (s as any).linkProfileId)
-        .map((s) => (s as any).linkProfileId as string),
+        .filter(
+          (s): s is Extract<Slot, { kind: 'new' }> & { linkProfileId: string } =>
+            s.kind === 'new' && Boolean(s.linkProfileId),
+        )
+        .map((s) => s.linkProfileId),
     ),
   )
   const newRows = slots.filter((s) => s.kind === 'new') as Array<
@@ -512,7 +523,7 @@ export async function createBookingWithGuests(
       .from('guests')
       .select('id')
       .in('id', existingIds)
-    const foundIds = new Set((found ?? []).map((g: any) => g.id as string))
+    const foundIds = new Set((found ?? []).map((g) => g.id))
     if (foundIds.size !== existingIds.length) {
       return {
         error: 'One of the picked guests no longer exists. Refresh and try again.',
@@ -527,7 +538,7 @@ export async function createBookingWithGuests(
       .select('id, full_name, linked_profile_id')
       .in('linked_profile_id', linkProfileIds)
     if (existingLinks && existingLinks.length > 0) {
-      const first = existingLinks[0] as any
+      const first = existingLinks[0]
       return {
         error: `That account is already linked to guest "${first.full_name}". Pick that guest instead, or unlink first.`,
       }
@@ -553,7 +564,7 @@ export async function createBookingWithGuests(
       }
     }
     newRows.forEach((_, i) => {
-      insertedIdsByIndex.set(i, (created[i] as any).id as string)
+      insertedIdsByIndex.set(i, created[i].id)
     })
   }
 
@@ -615,14 +626,15 @@ export async function createBookingWithGuests(
   // admin sees unassigned guests in the panel and can fix from there.
   const assignmentFailures: string[] = []
   for (let i = 0; i < slots.length; i++) {
-    const roomId = (slots[i] as any).roomId as string | null
+    const slot = slots[i]
+    const roomId = slot.roomId
     if (!roomId) continue
     const guestId = resolvedGuestIds[i]
     const r = await assignCanonicalGuestToRoom(requestId, guestId, roomId)
     if (r.error) {
       const nameLabel =
-        slots[i].kind === 'new'
-          ? (slots[i] as any).name
+        slot.kind === 'new'
+          ? slot.name
           : 'a saved guest'
       assignmentFailures.push(`${nameLabel}: ${r.error}`)
     }
@@ -676,8 +688,8 @@ export async function assignCanonicalGuestToBed(
   if (guestRes.error || !guestRes.data) {
     return { error: 'Guest not found — refresh and try again' }
   }
-  const req = reqRes.data as any
-  const guest = guestRes.data as any
+  const req = reqRes.data
+  const guest = guestRes.data
 
   // Verify the bed isn't already occupied by another booking on these
   // dates. RLS handles permissions; this is a UX guard.
@@ -690,7 +702,7 @@ export async function assignCanonicalGuestToBed(
     .gt('check_out', req.check_in)
 
   const conflictingOther = (conflicts ?? []).find(
-    (b: any) => b.request_id !== requestId,
+    (b) => b.request_id !== requestId,
   )
   if (conflictingOther) {
     return {
@@ -710,7 +722,7 @@ export async function assignCanonicalGuestToBed(
 
   if (existingForGuest && existingForGuest.length > 0) {
     // If they're already on the target bed, no-op
-    if (existingForGuest.some((b: any) => b.bed_id === bedId)) {
+    if (existingForGuest.some((b) => b.bed_id === bedId)) {
       return { ok: true }
     }
     // Update the existing row to the new bed
@@ -782,7 +794,7 @@ export async function assignCanonicalGuestToRoom(
     return { error: 'No beds in that room' }
   }
 
-  const bedIds = beds.map((b: any) => b.id as string)
+  const bedIds = beds.map((b) => b.id)
 
   // Bookings that already occupy any of those beds in our window. We
   // exclude bookings under the SAME request (admin can re-assign their
@@ -793,14 +805,14 @@ export async function assignCanonicalGuestToRoom(
     .select('bed_id, request_id')
     .eq('status', 'approved')
     .in('bed_id', bedIds)
-    .lt('check_in', (req as any).check_out)
-    .gt('check_out', (req as any).check_in)
+    .lt('check_in', req.check_out)
+    .gt('check_out', req.check_in)
     .neq('request_id', requestId)
 
   const occupied = new Set(
-    ((conflicts as any[]) ?? []).map((c) => c.bed_id as string),
+    (conflicts ?? []).map((c) => c.bed_id),
   )
-  const freeBed = (beds as any[]).find((b) => !occupied.has(b.id))
+  const freeBed = beds.find((b) => !occupied.has(b.id))
 
   if (!freeBed) {
     return {
@@ -889,7 +901,7 @@ export async function addGuestToBookingList(
     .eq('request_id', requestId)
     .order('position', { ascending: false })
     .limit(1)
-  const nextPos = ((existingRows as any[])?.[0]?.position ?? -1) + 1
+  const nextPos = (existingRows?.[0]?.position ?? -1) + 1
 
   // Insert the join row (unique constraint prevents duplicates)
   const { error: joinErr } = await supabase
@@ -946,7 +958,7 @@ export async function restoreGuestToBookingList(
     .eq('request_id', requestId)
     .order('position', { ascending: false })
     .limit(1)
-  const nextPos = ((existingRows as any[])?.[0]?.position ?? -1) + 1
+  const nextPos = (existingRows?.[0]?.position ?? -1) + 1
 
   const { error } = await supabase
     .from('booking_request_guests')
@@ -954,7 +966,7 @@ export async function restoreGuestToBookingList(
       request_id: requestId,
       guest_id: guestId,
       position: nextPos,
-    } as any)
+    })
   if (error) {
     if ((error.message ?? '').toLowerCase().includes('duplicate')) {
       // Already restored — treat as success

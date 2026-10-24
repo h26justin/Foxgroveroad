@@ -6,6 +6,7 @@ import { getAllRoomStatuses, STATUS_LABEL } from '@/lib/room-status'
 import { floorLabelShort } from '@/lib/floors'
 import {
   todayISO,
+  addDaysISO,
   formatDateShort,
   formatDate,
   nightsBetween,
@@ -41,11 +42,7 @@ export default async function DashboardPage() {
   const profile = await requireProfile()
   const supabase = await createClient()
   const today = todayISO()
-  const fortnightOut = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + 14)
-    return d.toISOString().split('T')[0]
-  })()
+  const fortnightOut = addDaysISO(today, 14)
 
   const isAdmin = profile.role === 'admin'
   const isCleaner = profile.role === 'cleaner'
@@ -93,28 +90,28 @@ export default async function DashboardPage() {
           .from('cleaner_tasks_today')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'overdue')
-      : Promise.resolve({ count: 0 } as any),
+      : Promise.resolve({ count: 0 }),
     // (3b) Due-today task count
     showsTasks
       ? supabase
           .from('cleaner_tasks_today')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'due')
-      : Promise.resolve({ count: 0 } as any),
+      : Promise.resolve({ count: 0 }),
     // (3c) Completed today
     showsTasks
       ? supabase
           .from('task_completions')
           .select('id', { count: 'exact', head: true })
           .eq('completed_at_date', today)
-      : Promise.resolve({ count: 0 } as any),
+      : Promise.resolve({ count: 0 }),
     // (3d) Open issues
     showsTasks
       ? supabase
           .from('issues')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'open')
-      : Promise.resolve({ count: 0 } as any),
+      : Promise.resolve({ count: 0 }),
     // (3e) Pending one-offs — full rows so the dashboard can show the
     // descriptions in full (v32). Admin/cleaner only.
     showsTasks
@@ -126,7 +123,7 @@ export default async function DashboardPage() {
           .eq('status', 'pending')
           .order('priority', { ascending: false }) // urgent first
           .order('created_at', { ascending: false })
-      : Promise.resolve({ data: [] } as any),
+      : Promise.resolve({ data: [] }),
     // (4) For admin: pending booking-request count (drives the badge
     // and the "review pending" quick action)
     isAdmin
@@ -134,7 +131,7 @@ export default async function DashboardPage() {
           .from('booking_requests')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'pending')
-      : Promise.resolve({ count: 0 } as any),
+      : Promise.resolve({ count: 0 }),
     // Feature flags — drive whether issue / one-shot blocks render
     getFeatureFlags(),
     // (5) Bedrooms list — for the v31 status-light section
@@ -152,14 +149,13 @@ export default async function DashboardPage() {
     getBinCacheWithBackgroundRefresh(),
   ])
 
-  const inHouse = (inHouseRes.data as any[]) ?? []
-  const upcoming = (upcomingRes.data as any[]) ?? []
+  const inHouse = inHouseRes.data ?? []
+  const upcoming = upcomingRes.data ?? []
   const overdueCount = overdueCountRes.count ?? 0
   const dueTodayCount = dueTodayCountRes.count ?? 0
   const completedTodayCount = completedTodayCountRes.count ?? 0
   const openIssuesCount = openIssuesCountRes.count ?? 0
-  const pendingOneshots = (pendingOneshotsRes.data as any[]) ?? []
-  const pendingOneshotsCount = pendingOneshots.length
+  const pendingOneshots = pendingOneshotsRes.data ?? []
   const pendingRequestsCount = pendingRequestsCountRes.count ?? 0
   const issuesEnabled = flags['issues'] !== false
   const oneshotsEnabled = flags['oneshot_tasks'] !== false
@@ -170,7 +166,7 @@ export default async function DashboardPage() {
   const upcomingGroups = groupByRequest(upcoming)
 
   // ─── Bedroom status (v31) ─────────────────────────────────────────
-  const bedroomRooms = (bedroomRoomsRes.data as any[]) ?? []
+  const bedroomRooms = bedroomRoomsRes.data ?? []
   const bedroomCounts = { green: 0, orange: 0, red: 0 }
   for (const r of bedroomRooms) {
     const s = roomStatuses.get(r.id)?.status ?? 'green'
@@ -179,19 +175,21 @@ export default async function DashboardPage() {
   // Group bedrooms by floor for compact column display
   const _bedroomsByFloor = new Map<number, { id: string; name: string }[]>()
   for (const r of bedroomRooms) {
-    const list = _bedroomsByFloor.get(r.floor) ?? []
+    // floor is nullable in the schema; cast keeps the existing keying.
+    const floor = r.floor as number
+    const list = _bedroomsByFloor.get(floor) ?? []
     list.push({ id: r.id, name: r.name })
-    _bedroomsByFloor.set(r.floor, list)
+    _bedroomsByFloor.set(floor, list)
   }
   const bedroomRoomsByFloor = Array.from(_bedroomsByFloor.entries())
     .sort((a, b) => b[0] - a[0]) // top of house first
     .map(([floor, rooms]) => ({ floor, rooms }))
 
   // ─── Bin collections (v42) ────────────────────────────────────────
-  const binUpcoming = nextCollections((binCache as any).events ?? [], 3, today)
-  const binReminder = reminderForToday((binCache as any).events ?? [], today)
-  const binNotConfigured = !(binCache as any).source_url
-  const binHasError = !!(binCache as any).error
+  const binUpcoming = nextCollections(binCache.events ?? [], 3, today)
+  const binReminder = reminderForToday(binCache.events ?? [], today)
+  const binNotConfigured = !binCache.source_url
+  const binHasError = !!binCache.error
 
   return (
     <div>
@@ -245,11 +243,10 @@ export default async function DashboardPage() {
             </span>
           </h2>
           <div className="space-y-2">
-            {pendingOneshots.map((t: any) => {
+            {pendingOneshots.map((t) => {
               const isUrgent = t.priority === 'urgent'
-              const roomName = (t.rooms as any)?.name as string | undefined
-              const creator =
-                (t.creator as any)?.full_name as string | undefined
+              const roomName = t.rooms?.name
+              const creator = t.creator?.full_name
               const created = new Date(t.created_at)
               const ago = relativeFromCreated(created)
               return (
@@ -336,7 +333,7 @@ export default async function DashboardPage() {
               className="text-sm fg-mono"
               style={{ color: 'var(--color-muted)' }}
             >
-              No-one's in the house right now.
+              No-one&apos;s in the house right now.
             </p>
           </div>
         ) : (
@@ -515,7 +512,7 @@ export default async function DashboardPage() {
               color: 'var(--color-ink)',
             }}
           >
-            Today's tasks
+            Today&apos;s tasks
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatCard
@@ -589,7 +586,7 @@ export default async function DashboardPage() {
           </Link>
           {isCleaner && (
             <Link href="/housekeeping" className="fg-btn-ghost">
-              Open today's tasks →
+              Open today&apos;s tasks →
             </Link>
           )}
         </div>
@@ -604,11 +601,11 @@ export default async function DashboardPage() {
 
 type BookingRow = {
   id: string
-  request_id: string
+  request_id: string | null
   check_in: string
   check_out: string
   guest_name: string | null
-  beds: any
+  beds: { rooms: { name: string } | null } | null
 }
 
 type Group = {
@@ -632,7 +629,7 @@ function groupByRequest(rows: BookingRow[]): Group[] {
   const map = new Map<string, Group & { guestNames: Set<string> }>()
   for (const r of rows) {
     if (!r.request_id) continue
-    const roomName = (r.beds as any)?.rooms?.name ?? null
+    const roomName = r.beds?.rooms?.name ?? null
     const guest = r.guest_name?.trim() ?? null
     const existing = map.get(r.request_id)
     if (existing) {
@@ -691,7 +688,15 @@ function pluralise(n: number, word: string): string {
 }
 
 function greetingFor(name: string): string {
-  const hour = new Date().getHours()
+  // The server runs in UTC — use the house's clock so the greeting
+  // isn't an hour out during BST.
+  const hour = Number(
+    new Date().toLocaleString('en-GB', {
+      timeZone: 'Europe/London',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    }),
+  )
   const first = name.split(' ')[0]
   if (hour < 5) return `Up late, ${first}.`
   if (hour < 12) return `Good morning, ${first}.`

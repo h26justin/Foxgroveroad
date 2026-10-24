@@ -458,7 +458,7 @@ export default function PayClient({
         {/* Hours inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="fg-label">Linda's hours</label>
+            <label className="fg-label">Linda&apos;s hours</label>
             <input
               type="number"
               step="0.25"
@@ -471,7 +471,7 @@ export default function PayClient({
             />
           </div>
           <div>
-            <label className="fg-label">Sam's hours</label>
+            <label className="fg-label">Sam&apos;s hours</label>
             <input
               type="number"
               step="0.25"

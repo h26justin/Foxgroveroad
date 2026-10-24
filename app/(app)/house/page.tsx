@@ -1,21 +1,17 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { todayISO } from '@/lib/dates'
+import { todayISO, addDaysISO } from '@/lib/dates'
 import { getAllRoomStatuses } from '@/lib/room-status'
+import type { ComponentProps } from 'react'
 import HouseClient from './HouseClient'
+
+// HouseClient's prop shapes are narrower than the generated DB types
+// (non-null bed_id/floor, literal age_band) — the rows satisfy them in
+// practice, so we assert at the boundary.
+type HouseProps = ComponentProps<typeof HouseClient>
 
 // 30s soft cache — same pattern as /housekeeping.
 export const revalidate = 30
-
-/** Add a number of days to a YYYY-MM-DD date.
- *  v45: UTC-only arithmetic so the result doesn't shift by ±1 day in
- *  timezones east of UTC (BST/CEST). The previous local-parse + UTC-
- *  format combination silently dropped a day. */
-function addDaysISO(iso: string, delta: number): string {
-  const d = new Date(iso + 'T00:00:00Z')
-  d.setUTCDate(d.getUTCDate() + delta)
-  return d.toISOString().slice(0, 10)
-}
 
 /** Calendar window is a rolling 31-day view starting at the given ISO
  *  date. Default anchor is today, so the user always sees what's
@@ -54,21 +50,25 @@ export default async function HousePage({
   const endISO = days[days.length - 1]
 
   // Range label, e.g. "23 May → 22 Jun 2026". If start and end fall in
-  // the same month + year, collapse to "1 – 31 May 2026".
-  const endDateObj = new Date(endISO + 'T00:00:00')
+  // the same month + year, collapse to "1 – 31 May 2026". Both dates are
+  // UTC midnights, so read and format them in UTC too.
+  const endDateObj = new Date(endISO + 'T00:00:00Z')
   const sameMonthYear =
-    startDateObj.getFullYear() === endDateObj.getFullYear() &&
-    startDateObj.getMonth() === endDateObj.getMonth()
+    startDateObj.getUTCFullYear() === endDateObj.getUTCFullYear() &&
+    startDateObj.getUTCMonth() === endDateObj.getUTCMonth()
   const monthLabel = sameMonthYear
-    ? `${startDateObj.getDate()} – ${endDateObj.toLocaleDateString('en-GB', {
+    ? `${startDateObj.getUTCDate()} – ${endDateObj.toLocaleDateString('en-GB', {
+        timeZone: 'UTC',
         day: 'numeric',
         month: 'long',
         year: 'numeric',
       })}`
     : `${startDateObj.toLocaleDateString('en-GB', {
+        timeZone: 'UTC',
         day: 'numeric',
         month: 'short',
       })} → ${endDateObj.toLocaleDateString('en-GB', {
+        timeZone: 'UTC',
         day: 'numeric',
         month: 'short',
         year: 'numeric',
@@ -148,7 +148,7 @@ export default async function HousePage({
           .from('booking_requests')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'pending')
-      : Promise.resolve({ count: 0 } as any),
+      : Promise.resolve({ count: 0 }),
     // Status-strip counter: approved requests with no bed assignments yet
     isAdmin
       ? supabase
@@ -156,16 +156,16 @@ export default async function HousePage({
           .select('id, status, bookings:bookings!bookings_request_id_fkey(id)')
           .eq('status', 'approved')
           .gte('check_out', today)
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as never[] }),
   ])
 
-  const rooms = (roomsRes.data as any[]) ?? []
-  const beds = (bedsRes.data as any[]) ?? []
-  const visibleBookings = (visibleBookingsRes.data as any[]) ?? []
-  const visibleRequests = (visibleRequestsRes.data as any[]) ?? []
-  const allChildren = (childrenRes.data as any[]) ?? []
-  const templates = (templatesRes.data as any[]) ?? []
-  const checks = (checksRes.data as any[]) ?? []
+  const rooms = roomsRes.data ?? []
+  const beds = bedsRes.data ?? []
+  const visibleBookings = visibleBookingsRes.data ?? []
+  const visibleRequests = visibleRequestsRes.data ?? []
+  const allChildren = childrenRes.data ?? []
+  const templates = templatesRes.data ?? []
+  const checks = checksRes.data ?? []
   const pendingCount = pendingCountRes.count ?? 0
 
   // v22: build per-request canonical guest list. Each entry is the
@@ -180,13 +180,13 @@ export default async function HousePage({
       position: number
     }[]
   > = {}
-  for (const r of (brgRes.data as any[]) ?? []) {
+  for (const r of brgRes.data ?? []) {
     const list = (guestsByRequest[r.request_id] ??= [])
     if (r.guests) {
       list.push({
         guest_id: r.guest_id,
-        full_name: (r.guests as any).full_name ?? '(deleted guest)',
-        linked_profile_id: (r.guests as any).linked_profile_id ?? null,
+        full_name: r.guests.full_name ?? '(deleted guest)',
+        linked_profile_id: r.guests.linked_profile_id ?? null,
         position: r.position ?? 0,
       })
     }
@@ -227,19 +227,19 @@ export default async function HousePage({
         .select('linked_profile_id')
         .not('linked_profile_id', 'is', null),
     ])
-    allGuestsForPicker = ((poolRes.data as any[]) ?? []).map((g) => ({
+    allGuestsForPicker = (poolRes.data ?? []).map((g) => ({
       id: g.id,
       full_name: g.full_name,
       linked: !!g.linked_profile_id,
-      role: (g.profiles as any)?.role ?? null,
+      role: g.profiles?.role ?? null,
     }))
     const linkedSet = new Set(
-      ((existingLinksRes.data as any[]) ?? [])
+      (existingLinksRes.data ?? [])
         .map((g) => g.linked_profile_id)
         .filter(Boolean),
     )
-    linkableProfilesForPicker = ((allProfRes.data as any[]) ?? []).filter(
-      (p: any) => !linkedSet.has(p.id),
+    linkableProfilesForPicker = (allProfRes.data ?? []).filter(
+      (p) => !linkedSet.has(p.id),
     )
   }
 
@@ -265,7 +265,11 @@ export default async function HousePage({
   > = {}
   if (isAdmin) {
     const requesterIds = Array.from(
-      new Set(visibleRequests.map((r: any) => r.requested_by).filter(Boolean)),
+      new Set(
+        visibleRequests
+          .map((r) => r.requested_by)
+          .filter((id): id is string => Boolean(id)),
+      ),
     )
     if (requesterIds.length > 0) {
       const { data: guestRows } = await supabase
@@ -274,7 +278,7 @@ export default async function HousePage({
           'id, full_name, linked_profile_id, dietary_notes, allergies, room_preference, things_they_bring, general_notes',
         )
         .in('linked_profile_id', requesterIds)
-      for (const g of (guestRows as any[]) ?? []) {
+      for (const g of guestRows ?? []) {
         if (!g.linked_profile_id) continue
         requesterGuestNotesById[g.linked_profile_id] = {
           guest_id: g.id,
@@ -291,7 +295,7 @@ export default async function HousePage({
 
   // Compute "needs beds" count
   const needsBedsCount =
-    ((needsBedsRes.data as any[]) ?? []).filter(
+    (needsBedsRes.data ?? []).filter(
       (r) => !r.bookings || r.bookings.length === 0
     ).length
 
@@ -312,7 +316,7 @@ export default async function HousePage({
   ).length
 
   // Build per-room beds map for the panel
-  const bedsByRoom = new Map<string, any[]>()
+  const bedsByRoom = new Map<string, typeof beds>()
   for (const b of beds) {
     if (!bedsByRoom.has(b.room_id)) bedsByRoom.set(b.room_id, [])
     bedsByRoom.get(b.room_id)!.push(b)
@@ -334,10 +338,10 @@ export default async function HousePage({
       prevStart={addDaysISO(startISO, -WINDOW_DAYS)}
       nextStart={addDaysISO(startISO, +WINDOW_DAYS)}
       thisMonthStart={today}
-      rooms={roomsWithBeds}
-      visibleBookings={visibleBookings}
+      rooms={roomsWithBeds as HouseProps['rooms']}
+      visibleBookings={visibleBookings as HouseProps['visibleBookings']}
       visibleRequests={visibleRequests}
-      allChildren={allChildren}
+      allChildren={allChildren as HouseProps['allChildren']}
       templates={templates}
       checks={checks}
       requesterGuestNotesById={requesterGuestNotesById}

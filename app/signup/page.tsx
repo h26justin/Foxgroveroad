@@ -48,7 +48,7 @@ export default async function SignupPage({
             <h2 className="text-xl font-bold">Create your account</h2>
           </div>
           <p className="fg-mono mb-6 text-xs text-[color:var(--color-muted)]">
-            You'll be able to request rooms and see who's staying.
+            You&apos;ll be able to request rooms and see who&apos;s staying.
           </p>
 
           <form action={signup} className="space-y-5">

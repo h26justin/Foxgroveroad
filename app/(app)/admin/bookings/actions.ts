@@ -115,7 +115,7 @@ export async function moveBookingToRoomAndDates(
     .select('id, role')
     .eq('id', user.id)
     .single()
-  if ((profile as any)?.role !== 'admin') {
+  if (profile?.role !== 'admin') {
     return { error: 'Only admins can move bookings.' }
   }
 
@@ -138,10 +138,10 @@ export async function moveBookingToRoomAndDates(
     return { error: bookingErr?.message ?? 'Booking not found' }
   }
 
-  const currentRoomId = (booking.beds as any)?.room_id
-  const currentBedType = (booking.beds as any)?.bed_type
-  const currentBedId = (booking as any).bed_id
-  const movingRequestId = (booking as any).request_id
+  const currentRoomId = booking.beds?.room_id
+  const currentBedType = booking.beds?.bed_type
+  const currentBedId = booking.bed_id
+  const movingRequestId = booking.request_id
 
   // Find candidate beds in the target room
   const { data: candidateBeds, error: bedsErr } = await supabase
@@ -158,7 +158,7 @@ export async function moveBookingToRoomAndDates(
   //   - the booking we're moving itself
   //   - bookings that share the same request_id (couples sharing a bed
   //     within the same booking is allowed — must match the trigger logic)
-  const candidateBedIds = candidateBeds.map((b: any) => b.id)
+  const candidateBedIds = candidateBeds.map((b) => b.id)
   const { data: conflicts } = await supabase
     .from('bookings')
     .select('id, bed_id, request_id')
@@ -170,13 +170,13 @@ export async function moveBookingToRoomAndDates(
 
   const conflictBedIds = new Set(
     (conflicts ?? [])
-      .filter((c: any) => {
+      .filter((c) => {
         // Treat as conflict only if it's a DIFFERENT booking_request.
         // Null-request rows (legacy/orphan) are conservatively conflicts.
         if (!c.request_id || !movingRequestId) return true
         return c.request_id !== movingRequestId
       })
-      .map((c: any) => c.bed_id),
+      .map((c) => c.bed_id),
   )
 
   // If we're staying in the same room, prefer keeping the same bed.
@@ -190,16 +190,16 @@ export async function moveBookingToRoomAndDates(
   // Otherwise prefer matching bed_type, else any free bed
   if (!chosenBedId) {
     const sameType = candidateBeds.find(
-      (b: any) =>
+      (b) =>
         b.bed_type === currentBedType && !conflictBedIds.has(b.id)
     )
-    chosenBedId = (sameType as any)?.id ?? null
+    chosenBedId = sameType?.id ?? null
   }
   if (!chosenBedId) {
     const anyFree = candidateBeds.find(
-      (b: any) => !conflictBedIds.has(b.id)
+      (b) => !conflictBedIds.has(b.id)
     )
-    chosenBedId = (anyFree as any)?.id ?? null
+    chosenBedId = anyFree?.id ?? null
   }
 
   if (!chosenBedId) {

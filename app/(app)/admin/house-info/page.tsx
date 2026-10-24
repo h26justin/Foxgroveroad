@@ -21,6 +21,10 @@ const HINTS: Partial<Record<HouseSettingKey, string>> = {
     'Anything else they should know on arrival — boiler quirks, parking, alarm code.',
   bin_calendar_url:
     'Bromley council iCal URL — either the WasteWorks page (e.g. https://recyclingservices.bromley.gov.uk/waste/6122615) or its /calendar.ics endpoint. The dashboard pulls collection days from here.',
+  heating_cold_alert_c:
+    'Admins get a push when any heating zone drops below this temperature. Leave blank to turn cold alerts off.',
+  weather_latitude:
+    'Used to look up the outside temperature for the heating model. Defaults to Bromley — right-click the house in Google Maps to copy its exact coordinates.',
 }
 
 export default async function HouseInfoPage({
@@ -39,7 +43,7 @@ export default async function HouseInfoPage({
     .from('house_settings')
     .select('key, value')
 
-  const settings = asSettingsMap((rows as any[]) ?? [])
+  const settings = asSettingsMap(rows ?? [])
 
   return (
     <div className="max-w-2xl">

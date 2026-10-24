@@ -1,124 +1,83 @@
-# Foxgrove Road — setup walkthrough
+# Foxgrove Road
 
-Goal of this pass: empty repo → working app where you can sign up, log in, and land on a role-aware dashboard, deployed on Vercel.
+Private house-management app for Foxgrove Road: family bedroom bookings,
+housekeeping and cleaner tasks, linen, cleaner pay, issues, guests, bins,
+plants, chat, wiki, contacts, expenses, guest arrival packets, calendar
+feeds and heating (Heatmiser).
 
-## Order of operations
+- **Live:** https://foxgroveroad.vercel.app (Vercel project `foxgroveroad`,
+  auto-deploys from `main`)
+- **Database / auth / storage:** Supabase project "Foxgrove Road" (eu-west-3)
+- **Stack:** Next.js 16 (App Router, `proxy.ts` instead of middleware),
+  React 19, Tailwind 4, Supabase (`@supabase/ssr`), web push, Resend email
 
-1. [Create the Supabase project](#1-supabase)
-2. [Run the SQL schema](#2-schema)
-3. [Scaffold the Next.js app locally](#3-nextjs)
-4. [Drop these starter files in](#4-files)
-5. [Wire up environment variables](#5-env)
-6. [Run it locally](#6-run)
-7. [Sign up + promote yourself to admin](#7-admin)
-8. [Push to GitHub and add env vars to Vercel](#8-deploy)
+> This Next.js version has breaking changes from older docs — see
+> `AGENTS.md` and `node_modules/next/dist/docs/`.
 
----
-
-## 1. Supabase
-
-Go to [supabase.com](https://supabase.com), New Project. Pick the EU (London) region for lowest latency. Strong DB password — save it somewhere. Wait ~2 minutes for it to spin up.
-
-Once it's live, grab two values from **Project Settings → API**:
-
-- `Project URL` → this becomes `NEXT_PUBLIC_SUPABASE_URL`
-- `anon public` key → this becomes `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-Then turn off email confirmation for development: **Authentication → Sign In / Providers → Email → Confirm email: OFF**. Turn it back on before you go live.
-
-## 2. Schema
-
-In the Supabase dashboard, go to **SQL Editor** → New query. Paste the contents of `db/house_app_schema.sql` (included in this starter) and run. You should see "Success. No rows returned." If it errors, share the error and we'll fix it.
-
-## 3. Next.js
-
-In your local clone of the empty `FoxgroveRoad` repo:
+## Local development
 
 ```bash
-npx create-next-app@latest . --typescript --tailwind --app --eslint --src-dir=false --import-alias="@/*"
+npm ci
+# create .env.local with the variables below (copy values from Vercel)
+npm run dev    # http://localhost:3000
 ```
 
-Say yes to overwriting if it asks (the repo's empty anyway). Then install Supabase:
+| Script | What it does |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Vitest unit tests (`tests/`), incl. heating SQL in PGlite |
+| `npm run build` | Production build |
 
-```bash
-npm install @supabase/supabase-js @supabase/ssr
-```
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and build on
+every pull request.
 
-## 4. Files
+### Environment variables
 
-Drop the contents of this starter into your repo. The structure mirrors what `create-next-app` made — overwrite the generated `app/page.tsx` and `app/layout.tsx`. The new files are:
+Set in Vercel → Settings → Environment Variables. Never commit them.
 
-```
-middleware.ts
-lib/supabase/client.ts
-lib/supabase/server.ts
-lib/supabase/middleware.ts
-lib/auth.ts
-app/page.tsx                 (overwrites the default)
-app/layout.tsx               (overwrites the default)
-app/login/page.tsx
-app/login/actions.ts
-app/signup/page.tsx
-app/signup/actions.ts
-app/logout/route.ts
-app/auth/callback/route.ts
-app/(app)/layout.tsx
-app/(app)/dashboard/page.tsx
-.env.local.example
-db/house_app_schema.sql
-```
+| Variable | Needed for |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | everything |
+| `SUPABASE_SERVICE_ROLE_KEY` | admin actions, invites, arrival packets, calendar feeds, heating sync (server-only, bypasses RLS) |
+| `NEXT_PUBLIC_SITE_URL` | links in emails and pushes |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | web push |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | email mirror of notifications |
+| `HEATING_RELAY_SECRET` | heating relay → `/api/heating/sync` (32+ random chars) |
 
-## 5. Env
+Cloud (Claude Code) sessions: see `CLOUD.md`.
 
-Copy `.env.local.example` to `.env.local` and fill in your two Supabase values:
+## Database
 
-```bash
-cp .env.local.example .env.local
-```
+SQL lives in `db/` and is run by hand in the Supabase SQL editor, in
+number order. Every file is safe to re-run.
 
-Don't commit `.env.local` — it's already in the default `.gitignore` from `create-next-app`.
+| File | Contents |
+|---|---|
+| `00_base_schema.sql` | **Reference snapshot** of the whole live schema (tables, RLS policies, functions, triggers). Don't run it on the existing database. |
+| `02`–`10` | Incremental features (bookings, calendar feeds, announcements, indexes, audit, arrival packets, cleaner self-logs, bins, feature pack) |
+| `11_heating.sql` | Heatmiser zones, 5-minute readings, daily roll-up, thermal model, command queue |
+| `12_security_hardening.sql` | Approval gate on RLS, profile role guard, pending sign-ups, atomic bed assignment |
+| `13_function_grants.sql` | Stops internal/trigger functions being callable through the API |
 
-## 6. Run
+After a schema change, regenerate `lib/supabase/database.types.ts`
+(Supabase CLI `supabase gen types typescript`, or the Supabase MCP
+`generate_typescript_types`) and refresh `00_base_schema.sql`.
 
-```bash
-npm run dev
-```
+## Accounts and roles
 
-Open http://localhost:3000 — you should be redirected to `/login`.
+Roles: `admin`, `family`, `cleaner`, `pending`. Anyone can sign up; new
+accounts are `pending` (enforced by the `handle_new_user` trigger) and can
+see nothing until an admin approves them on **Team**. Admins can also
+invite people directly with a role. Users can't change their own role —
+a database trigger blocks it.
 
-## 7. Admin
+## Heating
 
-Click "Create one" on the login page → sign up with your email and a password. You'll get logged in and redirected to `/dashboard`, where it'll say your role is `family`.
-
-Now make yourself admin. Open the Supabase dashboard → **SQL Editor** and run:
-
-```sql
-update profiles set role = 'admin' where full_name = '<your email or name>';
--- or by email:
-update profiles set role = 'admin'
- where id = (select id from auth.users where email = 'you@example.com');
-```
-
-Refresh the dashboard — your role chip now says `admin`.
-
-## 8. Deploy
-
-```bash
-git add .
-git commit -m "Initial scaffold + auth"
-git push
-```
-
-Vercel will auto-deploy. Then in **Vercel → project-1oc0j → Settings → Environment Variables**, add the same two vars (`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`) for Production / Preview / Development. Hit Redeploy on the latest deployment so it picks them up.
-
-You're done with plumbing. Next pass we'll build the family booking form and the house-map drag-and-drop view against this foundation.
-
----
-
-## What you have once this is done
-
-- Three roles working: `admin`, `family`, `cleaner`
-- Anyone can sign up; defaults to `family`
-- You promote cleaners to `cleaner` role manually for now (same SQL pattern as step 7)
-- Routes under `app/(app)/...` are protected by middleware — unauthed users get bounced to `/login`
-- The dashboard already branches on role, so when we add the family booking form / cleaner today list / admin map, they slot into the existing shell without changes here.
+The Heatmiser neoHub is only reachable on the house network, so a small
+relay runs on an always-on device at the house and syncs with the app.
+See `heating-relay/README.md` for setup. The Heating page (admin, More →
+Heating) shows each room, lets admins change targets/holds/frost/away,
+and — after a few days of readings — predicts heating hours and warm-up
+times from each room's learned heat loss and the outdoor temperature.

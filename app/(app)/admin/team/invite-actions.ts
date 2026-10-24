@@ -3,6 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import type { Enums } from '@/lib/supabase/database.types'
+
+function isInvitableRole(
+  role: string
+): role is Exclude<Enums<'user_role'>, 'pending'> {
+  return ['admin', 'cleaner', 'family'].includes(role)
+}
 
 /**
  * Invite a new user via email magic-link. Sets their role in advance so
@@ -33,17 +40,17 @@ export async function inviteUser(
   }
   if (!fullName) return { error: 'Full name is required' }
   if (fullName.length > 200) return { error: 'Full name is too long' }
-  if (!['admin', 'cleaner', 'family'].includes(role)) {
+  if (!isInvitableRole(role)) {
     return { error: 'Role must be admin, cleaner, or family' }
   }
 
   let admin
   try {
     admin = createAdminClient()
-  } catch (e: any) {
+  } catch (e) {
     return {
       error:
-        e?.message ??
+        (e instanceof Error ? e.message : undefined) ??
         'Service role key not configured. Add SUPABASE_SERVICE_ROLE_KEY in Vercel.',
     }
   }

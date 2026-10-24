@@ -43,7 +43,7 @@ export async function createContact(
     notes,
     is_pinned: isPinned,
     created_by: me.id,
-  } as any)
+  })
   if (error) return { error: error.message }
 
   revalidatePath('/contacts')
@@ -80,7 +80,7 @@ export async function updateContact(
       notes,
       is_pinned: isPinned,
       updated_at: new Date().toISOString(),
-    } as any)
+    })
     .eq('id', id)
   if (error) return { error: error.message }
 

@@ -121,10 +121,10 @@ export default function ReportIssueButton({
             setBusy(false)
             return
           }
-        } catch (err: any) {
+        } catch (err) {
           setError(
             'Issue saved, but the photo failed: ' +
-              (err?.message ?? 'unknown error')
+              (err instanceof Error ? err.message : 'unknown error')
           )
           setBusy(false)
           return
@@ -137,8 +137,8 @@ export default function ReportIssueButton({
       setPhotoFile(null)
       setBusy(false)
       startTransition(() => router.refresh())
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to report issue')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to report issue')
       setBusy(false)
     }
   }

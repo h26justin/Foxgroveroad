@@ -40,12 +40,12 @@ export async function getBinCache(): Promise<BinCacheRow> {
     }
   }
   return {
-    source_url: (data as any).source_url ?? null,
-    events: Array.isArray((data as any).events)
-      ? ((data as any).events as BinEvent[])
+    source_url: data.source_url ?? null,
+    events: Array.isArray(data.events)
+      ? (data.events as unknown as BinEvent[])
       : [],
-    fetched_at: (data as any).fetched_at,
-    error: (data as any).error ?? null,
+    fetched_at: data.fetched_at,
+    error: data.error ?? null,
   }
 }
 
@@ -104,7 +104,7 @@ export async function refreshBinCacheIfStale(force = false): Promise<BinCacheRow
     .select('value')
     .eq('key', 'bin_calendar_url')
     .maybeSingle()
-  const url = ((setting as any)?.value ?? '').trim()
+  const url = (setting?.value ?? '').trim()
 
   if (!url) {
     const row: BinCacheRow = {
@@ -121,7 +121,7 @@ export async function refreshBinCacheIfStale(force = false): Promise<BinCacheRow
         error: row.error,
         fetched_at: row.fetched_at,
         updated_at: row.fetched_at,
-      } as any)
+      })
       .eq('id', 'singleton')
     return row
   }
@@ -150,8 +150,8 @@ export async function refreshBinCacheIfStale(force = false): Promise<BinCacheRow
       const text = await res.text()
       events = parseIcsEvents(text)
     }
-  } catch (err: any) {
-    error = err?.message ?? 'fetch failed'
+  } catch (err) {
+    error = err instanceof Error ? err.message : 'fetch failed'
   }
 
   const fetched_at = new Date().toISOString()
@@ -163,7 +163,7 @@ export async function refreshBinCacheIfStale(force = false): Promise<BinCacheRow
       error,
       fetched_at,
       updated_at: fetched_at,
-    } as any)
+    })
     .eq('id', 'singleton')
 
   return { source_url: icsUrl, events, fetched_at, error }

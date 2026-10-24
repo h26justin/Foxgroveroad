@@ -1,5 +1,6 @@
 import 'server-only'
 import { createServerClient } from '@supabase/ssr'
+import type { Database } from './database.types'
 
 /**
  * Returns a Supabase client with the SERVICE ROLE key — bypasses RLS
@@ -29,7 +30,7 @@ export function createAdminClient() {
 
   // No cookie handling — service role doesn't represent a user session.
   // We pass empty cookie handlers so @supabase/ssr is happy.
-  return createServerClient(url, serviceKey, {
+  return createServerClient<Database>(url, serviceKey, {
     cookies: {
       getAll() {
         return []
