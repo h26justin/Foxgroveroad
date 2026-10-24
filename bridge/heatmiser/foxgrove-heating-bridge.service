@@ -1,0 +1,20 @@
+# systemd unit for a Raspberry Pi. See README.md for install steps.
+[Unit]
+Description=Foxgrove Road heating bridge (Heatmiser neoHub)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/foxgrove-heating-bridge
+ExecStart=/usr/bin/node --env-file=.env bridge.mjs
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

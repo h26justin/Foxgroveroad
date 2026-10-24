@@ -3,13 +3,11 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
 
 export async function assignBeds(formData: FormData) {
+  const me = await requireAdmin()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
   const requestId = String(formData.get('request_id') ?? '')
   const bedIds = formData.getAll('bed_ids').map(String).filter(Boolean)
@@ -77,7 +75,7 @@ export async function assignBeds(formData: FormData) {
     check_out: req.check_out,
     status: 'approved' as const,
     approved_at: new Date().toISOString(),
-    approved_by: user.id,
+    approved_by: me.id,
   }))
 
   const { error: insertErr } = await supabase.from('bookings').insert(rows)
@@ -101,6 +99,7 @@ export async function assignBeds(formData: FormData) {
 }
 
 export async function unassignBeds(formData: FormData) {
+  await requireAdmin()
   const supabase = await createClient()
   const requestId = String(formData.get('request_id') ?? '')
   if (!requestId) redirect('/admin/bookings')

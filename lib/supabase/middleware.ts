@@ -1,8 +1,22 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Routes that don't require authentication
-const PUBLIC_PATHS = ['/login', '/signup', '/auth']
+// Routes that don't require authentication. The token routes
+// (/arrival/<token>, /api/calendar/<token>) and the heating bridge carry
+// their own auth, so they must not bounce anonymous callers to /login.
+const PUBLIC_PATHS = [
+  '/login',
+  '/signup',
+  '/auth',
+  '/arrival',
+  '/api/calendar',
+  '/api/heating',
+]
+
+// Match whole path segments so '/auth' doesn't also open '/authxyz'.
+function isPublicPath(path: string): boolean {
+  return PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/'))
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -34,7 +48,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
-  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p))
+  const isPublic = isPublicPath(path)
 
   // Logged-out user trying to access a protected page → /login
   if (!user && !isPublic) {

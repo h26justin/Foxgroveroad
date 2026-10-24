@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone Node script that runs on a Pi in the house.
+    "bridge/**",
   ]),
 ]);
 

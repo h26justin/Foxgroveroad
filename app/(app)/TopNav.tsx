@@ -134,6 +134,15 @@ export default function TopNav({
     })
   }
 
+  if (!isCleaner && flagOn('heating')) {
+    sectionItems.push({
+      href: '/heating',
+      label: 'Heating',
+      icon: '🌡',
+      match: '/heating',
+    })
+  }
+
   if (userPrefs.show_contacts) {
     sectionItems.push({
       href: '/contacts',

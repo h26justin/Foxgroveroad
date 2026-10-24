@@ -1,0 +1,17 @@
+{
+  "name": "foxgrove-heating-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Polls the Heatmiser neoHub on the home network and reports to the Foxgrove Road app.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node --env-file=.env bridge.mjs",
+    "probe": "node --env-file=.env bridge.mjs --probe"
+  },
+  "dependencies": {
+    "ws": "8.18.3"
+  }
+}

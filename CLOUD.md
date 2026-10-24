@@ -34,6 +34,8 @@ At claude.ai/code → environment picker → **Add environment**:
 | `SUPABASE_SERVICE_ROLE_KEY` | admin server actions | **bypasses RLS — leave out unless a task needs it** |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | web push | optional |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | email mirror | optional; cloud sessions could send real email |
+| `HEATING_BRIDGE_TOKEN` | heating bridge check-ins (`/api/heating/bridge`) | secret; same value on the Pi (`bridge/heatmiser/.env`) |
+| `CRON_SECRET` | heating watchdog (`/api/heating/check`) | secret; also stored in Supabase Vault, see `db/13_heating_watchdog.sql` |
 
 Copy values from the Vercel project settings — never paste them into code or chat.
 
