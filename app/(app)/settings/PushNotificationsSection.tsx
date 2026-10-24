@@ -72,10 +72,10 @@ export default function PushNotificationsSection() {
       const isIOS =
         /iPad|iPhone|iPod/.test(ua) ||
         (navigator.platform === 'MacIntel' &&
-          (navigator as any).maxTouchPoints > 1)
+          navigator.maxTouchPoints > 1)
       const isStandalone =
         window.matchMedia?.('(display-mode: standalone)').matches ||
-        (navigator as any).standalone === true
+        (navigator as Navigator & { standalone?: boolean }).standalone === true
       if (isIOS && !isStandalone) {
         if (!cancelled) setState({ kind: 'needs-install' })
         return
@@ -103,11 +103,11 @@ export default function PushNotificationsSection() {
             setState({ kind: 'idle' })
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) {
           setState({
             kind: 'unsupported',
-            reason: `Service worker failed to register: ${err?.message ?? 'unknown error'}`,
+            reason: `Service worker failed to register: ${err instanceof Error ? err.message : 'unknown error'}`,
           })
         }
       }
@@ -164,9 +164,9 @@ export default function PushNotificationsSection() {
       }
       setState({ kind: 'subscribed', endpoint })
       setBusy(false)
-    } catch (err: any) {
+    } catch (err) {
       setBusy(false)
-      setMessage(err?.message ?? 'Could not enable notifications')
+      setMessage(err instanceof Error ? err.message : 'Could not enable notifications')
     }
   }
 
@@ -186,9 +186,9 @@ export default function PushNotificationsSection() {
       await unsubscribePush(fd)
       setState({ kind: 'idle' })
       setBusy(false)
-    } catch (err: any) {
+    } catch (err) {
       setBusy(false)
-      setMessage(err?.message ?? 'Could not disable notifications')
+      setMessage(err instanceof Error ? err.message : 'Could not disable notifications')
     }
   }
 
@@ -204,9 +204,9 @@ export default function PushNotificationsSection() {
       } else {
         setMessage('Test sent — should arrive in a moment.')
       }
-    } catch (err: any) {
+    } catch (err) {
       setBusy(false)
-      setMessage(err?.message ?? 'Failed to send test')
+      setMessage(err instanceof Error ? err.message : 'Failed to send test')
     }
   }
 
@@ -264,7 +264,7 @@ export default function PushNotificationsSection() {
             className="text-sm fg-mono mb-3"
             style={{ color: 'var(--color-muted)' }}
           >
-            Get a push notification when there's a new task or issue
+            Get a push notification when there&apos;s a new task or issue
             you need to see.
           </p>
           <button

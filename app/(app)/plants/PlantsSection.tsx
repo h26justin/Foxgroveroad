@@ -176,8 +176,6 @@ export default function PlantsSection({
 function PlantRow({
   plant,
   canWater,
-  isAdmin,
-  currentUserId,
   isBusy,
   onWater,
   onUndo,

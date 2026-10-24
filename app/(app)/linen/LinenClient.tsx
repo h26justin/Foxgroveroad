@@ -218,7 +218,7 @@ export default function LinenClient({
             className="text-sm fg-mono mb-4"
             style={{ color: 'var(--color-muted)' }}
           >
-            We'll work out the expected counts from each bedroom's beds, using
+            We&apos;ll work out the expected counts from each bedroom&apos;s beds, using
             2 sets per room: 2 pillowcases per pillow, 2 duvet covers per bed,
             and so on.
           </p>

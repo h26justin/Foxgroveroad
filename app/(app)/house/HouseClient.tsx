@@ -65,10 +65,8 @@ type Check = {
 export default function HouseClient({
   profile,
   isAdmin,
-  today,
   monthLabel,
   startISO,
-  endISO,
   days,
   prevStart,
   nextStart,
@@ -354,7 +352,7 @@ export default function HouseClient({
         }))}
         pending={[]}
         approvedUnassigned={[]}
-        bookingsByRoom={calendarBookingsByRoom as any}
+        bookingsByRoom={calendarBookingsByRoom}
         startISO={startISO}
         currentMonthStart={thisMonthStart}
         onBookingTap={isAdmin ? handleBookingTap : undefined}

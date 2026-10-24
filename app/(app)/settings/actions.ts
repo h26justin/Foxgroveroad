@@ -92,7 +92,7 @@ export async function updateFeaturePrefs(formData: FormData) {
 
   const { error } = await supabase
     .from('user_feature_prefs')
-    .upsert(payload as any, { onConflict: 'user_id' })
+    .upsert(payload, { onConflict: 'user_id' })
 
   if (error) {
     redirect(`/settings?error=${encodeURIComponent(error.message)}`)
@@ -119,7 +119,7 @@ export async function regenerateCalendarToken() {
   const newToken = randomBytes(32).toString('hex')
   const { error } = await supabase
     .from('profiles')
-    .update({ calendar_token: newToken } as any)
+    .update({ calendar_token: newToken })
     .eq('id', user.id)
 
   if (error) {

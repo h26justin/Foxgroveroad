@@ -28,18 +28,18 @@ export default async function NewBookingPage() {
     .eq('room_type', 'bedroom')
     .order('floor', { ascending: false })
     .order('name')
-  const rooms = ((roomsRaw as any[]) ?? []).map((r) => ({
-    id: r.id as string,
-    name: r.name as string,
+  const rooms = (roomsRaw ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
     floor: r.floor as number,
     is_owner_room: !!r.is_owner_room,
   }))
 
-  const allGuests = ((guestsRaw as any[]) ?? []).map((g) => ({
+  const allGuests = (guestsRaw ?? []).map((g) => ({
     id: g.id,
     full_name: g.full_name,
     linked: !!g.linked_profile_id,
-    role: (g.profiles as any)?.role ?? null,
+    role: g.profiles?.role ?? null,
   }))
 
   // Account holders not yet linked to any guest — for the optional
@@ -49,7 +49,7 @@ export default async function NewBookingPage() {
     .select('linked_profile_id')
     .not('linked_profile_id', 'is', null)
   const linkedSet = new Set(
-    ((existingLinks as any[]) ?? [])
+    (existingLinks ?? [])
       .map((g) => g.linked_profile_id)
       .filter(Boolean),
   )
@@ -58,7 +58,7 @@ export default async function NewBookingPage() {
     .select('id, full_name, role')
     .in('role', ['admin', 'family'])
     .order('full_name')
-  const linkableProfiles = ((allProfiles as any[]) ?? []).filter(
+  const linkableProfiles = (allProfiles ?? []).filter(
     (p) => !linkedSet.has(p.id),
   )
 

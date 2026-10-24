@@ -59,8 +59,8 @@ export default async function AwaitingApprovalPage() {
             className="text-sm fg-mono mb-6"
             style={{ color: 'var(--color-muted)' }}
           >
-            You'll get an email once you're in — just sign back in any time
-            and you'll be let through.
+            You&apos;ll get an email once you&apos;re in — just sign back in any time
+            and you&apos;ll be let through.
           </p>
 
           <LogoutButton />

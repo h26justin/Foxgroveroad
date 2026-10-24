@@ -1,12 +1,38 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
 
 type Platform = 'ios' | 'android' | 'desktop'
 type State = {
   platform: Platform
   installed: boolean
 }
+
+// Cached so useSyncExternalStore sees a stable snapshot between renders.
+let detectedState: State | null = null
+
+function detectState(): State {
+  if (detectedState) return detectedState
+  const ua = navigator.userAgent || ''
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    // iPadOS 13+ identifies as Mac; check touch points to disambiguate
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const isAndroid = /Android/.test(ua)
+  const platform: Platform = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop'
+
+  // iOS sets navigator.standalone (legacy); modern browsers expose
+  // display-mode media query.
+  const installed =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+
+  detectedState = { platform, installed }
+  return detectedState
+}
+
+// Platform/install state doesn't change while the page is open.
+const noopSubscribe = () => () => {}
 
 /**
  * Platform-aware "Install on home screen" instructions. iOS users get
@@ -16,29 +42,13 @@ type State = {
  *
  * If the app is already running standalone, shows a confirmation.
  *
- * Detection runs on mount only; no rerender on resize. Good enough for
- * a settings-page card.
+ * Detection runs once on the client; no rerender on resize. Good enough
+ * for a settings-page card.
  */
 export default function InstallSection() {
-  const [state, setState] = useState<State | null>(null)
-
-  useEffect(() => {
-    const ua = navigator.userAgent || ''
-    const isIOS =
-      /iPad|iPhone|iPod/.test(ua) ||
-      // iPadOS 13+ identifies as Mac; check touch points to disambiguate
-      (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1)
-    const isAndroid = /Android/.test(ua)
-    const platform: Platform = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop'
-
-    // iOS sets navigator.standalone (legacy); modern browsers expose
-    // display-mode media query.
-    const installed =
-      window.matchMedia?.('(display-mode: standalone)').matches ||
-      (navigator as any).standalone === true
-
-    setState({ platform, installed })
-  }, [])
+  // Server snapshot is null, so SSR + hydration render the loading card
+  // and the client then swaps in the detected state.
+  const state = useSyncExternalStore(noopSubscribe, detectState, () => null)
 
   // Initial render: don't flicker between states. Show nothing until
   // we know what to display.
@@ -95,7 +105,7 @@ export default function InstallSection() {
               className="block fg-mono text-xs mt-1"
               style={{ color: 'var(--color-muted)' }}
             >
-              Other browsers (Chrome on iOS) can't install web apps.
+              Other browsers (Chrome on iOS) can&apos;t install web apps.
             </span>
           </li>
           <li>
@@ -131,7 +141,7 @@ export default function InstallSection() {
           style={{ color: 'var(--color-ink)', listStylePosition: 'inside' }}
         >
           <li>
-            Open Chrome's menu (three dots, top right)
+            Open Chrome&apos;s menu (three dots, top right)
           </li>
           <li>
             Tap <strong>Install app</strong> or{' '}

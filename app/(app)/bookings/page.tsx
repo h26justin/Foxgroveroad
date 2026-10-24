@@ -65,7 +65,7 @@ export default async function BookingsPage({
           )
           .in('request_id', requestIds)
           .order('position')
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as never[] }),
     requestIds.length > 0
       ? supabase
           .from('bookings')
@@ -74,16 +74,16 @@ export default async function BookingsPage({
           )
           .in('request_id', requestIds)
           .eq('status', 'approved')
-      : Promise.resolve({ data: [] as any[] }),
+      : Promise.resolve({ data: [] as never[] }),
   ])
 
   // Build per-request guest list
   const guestsByRequest = new Map<string, GuestEntry[]>()
-  for (const r of (brgRes.data as any[]) ?? []) {
+  for (const r of brgRes.data ?? []) {
     if (!r.guests) continue
     const list = guestsByRequest.get(r.request_id) ?? []
     list.push({
-      full_name: (r.guests as any).full_name ?? '(deleted guest)',
+      full_name: r.guests.full_name ?? '(deleted guest)',
       position: r.position ?? 0,
     })
     guestsByRequest.set(r.request_id, list)
@@ -94,11 +94,14 @@ export default async function BookingsPage({
 
   // Build per-request bed assignment list
   const bedsByRequest = new Map<string, BedAssignment[]>()
-  for (const b of (bedsRes.data as any[]) ?? []) {
+  for (const b of bedsRes.data ?? []) {
+    // request_id is nullable in the schema but the .in() filter above
+    // guarantees it's set on every row here.
+    if (!b.request_id) continue
     const list = bedsByRequest.get(b.request_id) ?? []
     list.push({
-      room_name: (b.beds as any)?.rooms?.name ?? '(deleted room)',
-      bed_label: (b.beds as any)?.name ?? '?',
+      room_name: b.beds?.rooms?.name ?? '(deleted room)',
+      bed_label: b.beds?.name ?? '?',
       guest_name: b.guest_name ?? null,
     })
     bedsByRequest.set(b.request_id, list)

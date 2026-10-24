@@ -543,7 +543,7 @@ export default function BookingPanel({
         <div className="p-5">
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
             This booking is no longer in the visible window. Try navigating to
-            the month it's in.
+            the month it&apos;s in.
           </p>
         </div>
       </aside>
@@ -640,11 +640,6 @@ export default function BookingPanel({
       booking_id: b.id,
     })
   }
-
-  // List of guests on this booking who haven't yet been assigned to a bed
-  const unassignedBookingGuests = bookingGuests.filter(
-    (g) => !bedByCanonicalGuest.has(g.guest_id),
-  )
 
   // Group rooms by floor for the bed grid
   const guestRooms = rooms.filter(
@@ -1232,9 +1227,6 @@ export default function BookingPanel({
                                                 .map((p) => p.guest_name ?? 'Guest')
                                                 .join(', ')
                                             : null
-                                        const isSingle =
-                                          bedOpt.bed_type === 'single' ||
-                                          bedOpt.bed_type === 'cot'
 
                                         function onClickAssign() {
                                           // v43: no more confirm dialog.

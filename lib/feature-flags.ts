@@ -1,5 +1,6 @@
 import 'server-only'
 import { cache } from 'react'
+import { unstable_rethrow } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 /**
@@ -77,6 +78,9 @@ export const getFeatureFlags = cache(
       }
       return map
     } catch (err) {
+      // Let Next's own control-flow errors (e.g. "this page is dynamic"
+      // during build) through instead of logging them as failures.
+      unstable_rethrow(err)
       console.error('[features] threw:', err instanceof Error ? err.message : err)
       return defaultFlagMap()
     }

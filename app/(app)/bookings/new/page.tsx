@@ -37,7 +37,7 @@ export default async function NewBookingPage({
           className="text-sm fg-mono"
           style={{ color: 'var(--color-muted)' }}
         >
-          Pick your dates and tell us about your group. We'll confirm the
+          Pick your dates and tell us about your group. We&apos;ll confirm the
           bedrooms once approved.
         </p>
       </div>

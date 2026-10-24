@@ -45,7 +45,7 @@ export default async function ArrivalPacketPage({
     .maybeSingle()
 
   if (!booking) notFound()
-  const b = booking as any
+  const b = booking
 
   if (todayISO() > addDaysISO(b.check_out, ARRIVAL_LINK_GRACE_DAYS)) {
     return <ExpiredPacket />
@@ -62,11 +62,11 @@ export default async function ArrivalPacketPage({
       .eq('status', 'approved'),
   ])
 
-  const settings = asSettingsMap((settingsRes.data as any[]) ?? [])
-  const beds = (bedsRes.data as any[]) ?? []
+  const settings = asSettingsMap(settingsRes.data ?? [])
+  const beds = bedsRes.data ?? []
 
   const requesterName: string =
-    (b.requester as any)?.full_name?.split(' ')[0] ?? 'guest'
+    b.requester?.full_name?.split(' ')[0] ?? 'guest'
 
   const checkInDate = new Date(b.check_in + 'T00:00:00')
   const checkOutDate = new Date(b.check_out + 'T00:00:00')
@@ -141,7 +141,7 @@ export default async function ArrivalPacketPage({
 
         {beds.length > 0 && (
           <Section title="Your rooms">
-            {beds.map((bed: any) => {
+            {beds.map((bed) => {
               const roomName = bed.beds?.rooms?.name ?? 'Room'
               const bedName = bed.beds?.name ?? 'bed'
               return (

@@ -60,15 +60,26 @@ export default function RequestForm({
   const [checkOut, setCheckOut] = useState<string>(tomorrow)
 
   const [availability, setAvailability] = useState<AvailabilityResult | null>(null)
-  const [availabilityLoading, setAvailabilityLoading] = useState(false)
+  const [availabilityLoading, setAvailabilityLoading] = useState(
+    () => Boolean(today && tomorrow && today < tomorrow),
+  )
+
+  // When the date range changes, reset the availability state during
+  // render (not in an effect) so the UI never shows a stale result.
+  const rangeKey = `${checkIn}|${checkOut}`
+  const [prevRangeKey, setPrevRangeKey] = useState(rangeKey)
+  if (rangeKey !== prevRangeKey) {
+    setPrevRangeKey(rangeKey)
+    if (!checkIn || !checkOut || checkIn >= checkOut) {
+      setAvailability(null)
+    } else {
+      setAvailabilityLoading(true)
+    }
+  }
 
   // Debounced availability check whenever the date range changes.
   useEffect(() => {
-    if (!checkIn || !checkOut || checkIn >= checkOut) {
-      setAvailability(null)
-      return
-    }
-    setAvailabilityLoading(true)
+    if (!checkIn || !checkOut || checkIn >= checkOut) return
     let cancelled = false
     const handle = setTimeout(async () => {
       const res = await checkAvailability(checkIn, checkOut)
@@ -238,7 +249,7 @@ export default function RequestForm({
               className="text-xs fg-mono mt-1"
               style={{ color: 'var(--color-muted)' }}
             >
-              We'll work out bed arrangements with you for larger groups.
+              We&apos;ll work out bed arrangements with you for larger groups.
             </p>
           </div>
         </details>
@@ -265,7 +276,7 @@ export default function RequestForm({
             className="text-xs fg-mono"
             style={{ color: 'var(--color-muted)' }}
           >
-            No children. Tap + Add child if you're bringing any.
+            No children. Tap + Add child if you&apos;re bringing any.
           </p>
         )}
 
@@ -332,7 +343,7 @@ export default function RequestForm({
                   className="text-xs fg-mono mt-2"
                   style={{ color: 'var(--color-amber)' }}
                 >
-                  💡 Foxgrove Road doesn't supply cots — please bring a travel cot.
+                  💡 Foxgrove Road doesn&apos;t supply cots — please bring a travel cot.
                 </p>
               )}
             </div>
