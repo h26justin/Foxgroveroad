@@ -59,6 +59,7 @@ number order. Every file is safe to re-run.
 | `02`–`10` | Incremental features (bookings, calendar feeds, announcements, indexes, audit, arrival packets, cleaner self-logs, bins, feature pack) |
 | `11_heating.sql` | Heatmiser zones, 5-minute readings, daily roll-up, thermal model, command queue |
 | `12_security_hardening.sql` | Approval gate on RLS, profile role guard, pending sign-ups, atomic bed assignment |
+| `13_function_grants.sql` | Stops internal/trigger functions being callable through the API |
 
 After a schema change, regenerate `lib/supabase/database.types.ts`
 (Supabase CLI `supabase gen types typescript`, or the Supabase MCP
