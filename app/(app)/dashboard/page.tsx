@@ -688,7 +688,15 @@ function pluralise(n: number, word: string): string {
 }
 
 function greetingFor(name: string): string {
-  const hour = new Date().getHours()
+  // The server runs in UTC — use the house's clock so the greeting
+  // isn't an hour out during BST.
+  const hour = Number(
+    new Date().toLocaleString('en-GB', {
+      timeZone: 'Europe/London',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    }),
+  )
   const first = name.split(' ')[0]
   if (hour < 5) return `Up late, ${first}.`
   if (hour < 12) return `Good morning, ${first}.`

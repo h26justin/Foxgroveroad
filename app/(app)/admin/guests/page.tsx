@@ -38,13 +38,24 @@ export default async function GuestsIndexPage() {
   const stayCounts: Record<string, { total: number; upcoming: number; lastStay: string | null }> = {}
   if (guestIds.length > 0) {
     const today = todayISO()
+    // A stay can appear as several bed bookings for one request, and
+    // again via the linked profile's request below — count each stay
+    // once per guest, keyed by request id (or booking id if unlinked).
+    const seen = new Set<string>()
+    const firstSighting = (guestId: string, stayKey: string) => {
+      const key = `${guestId}|${stayKey}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }
     const { data: bookingRows } = await supabase
       .from('bookings')
-      .select('guest_id, check_in, check_out, status')
+      .select('id, request_id, guest_id, check_in, check_out, status')
       .in('guest_id', guestIds)
       .eq('status', 'approved')
     for (const b of bookingRows ?? []) {
       if (!b.guest_id) continue
+      if (!firstSighting(b.guest_id, b.request_id ?? `booking:${b.id}`)) continue
       const cur = stayCounts[b.guest_id] ?? {
         total: 0,
         upcoming: 0,
@@ -67,7 +78,7 @@ export default async function GuestsIndexPage() {
         .filter((id): id is string => !!id)
       const { data: reqRows } = await supabase
         .from('booking_requests')
-        .select('requested_by, check_in, status')
+        .select('id, requested_by, check_in, status')
         .in('requested_by', linkedProfileIds)
         .eq('status', 'approved')
       for (const r of reqRows ?? []) {
@@ -75,6 +86,7 @@ export default async function GuestsIndexPage() {
           (g) => g.linked_profile_id === r.requested_by,
         )
         if (!guest) continue
+        if (!firstSighting(guest.id, r.id)) continue
         const cur = stayCounts[guest.id] ?? {
           total: 0,
           upcoming: 0,
