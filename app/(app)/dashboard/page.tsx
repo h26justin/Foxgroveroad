@@ -6,6 +6,7 @@ import { getAllRoomStatuses, STATUS_LABEL } from '@/lib/room-status'
 import { floorLabelShort } from '@/lib/floors'
 import {
   todayISO,
+  addDaysISO,
   formatDateShort,
   formatDate,
   nightsBetween,
@@ -41,11 +42,7 @@ export default async function DashboardPage() {
   const profile = await requireProfile()
   const supabase = await createClient()
   const today = todayISO()
-  const fortnightOut = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + 14)
-    return d.toISOString().split('T')[0]
-  })()
+  const fortnightOut = addDaysISO(today, 14)
 
   const isAdmin = profile.role === 'admin'
   const isCleaner = profile.role === 'cleaner'

@@ -1,5 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
+import { addDaysISO } from '@/lib/dates'
 
 export type CleanerForProfile = {
   id: string
@@ -68,9 +69,7 @@ export async function selfLoggedHoursForWeek(
 ): Promise<Record<string, number>> {
   const supabase = await createClient()
   const start = weekStartIso
-  const endDate = new Date(start + 'T00:00:00')
-  endDate.setDate(endDate.getDate() + 6)
-  const end = endDate.toISOString().slice(0, 10)
+  const end = addDaysISO(start, 6)
 
   const { data } = await supabase
     .from('cleaner_hour_logs')

@@ -1,4 +1,5 @@
 import { requireProfile } from '@/lib/auth'
+import { todayISO, addDaysISO } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/server'
 import { getUserPrefs } from '@/lib/user-prefs'
 import { redirect } from 'next/navigation'
@@ -25,12 +26,8 @@ export default async function ExpensesPage() {
   const prefs = await getUserPrefs(profile.id)
   if (!prefs.show_expenses) redirect('/dashboard')
 
-  const today = new Date()
-  const yearAgoISO = (() => {
-    const d = new Date()
-    d.setUTCFullYear(d.getUTCFullYear() - 1)
-    return d.toISOString().slice(0, 10)
-  })()
+  const today = todayISO()
+  const yearAgoISO = addDaysISO(today, -365)
 
   const [expensesRes, payersRes] = await Promise.all([
     supabase
@@ -74,7 +71,7 @@ export default async function ExpensesPage() {
       currentUserId={profile.id}
       currentUserName={profile.full_name}
       isAdmin={profile.role === 'admin'}
-      todayISO={today.toISOString().slice(0, 10)}
+      todayISO={today}
       categoryLabels={CATEGORY_LABEL}
     />
   )

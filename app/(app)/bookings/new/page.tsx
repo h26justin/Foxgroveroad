@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
-import { todayISO } from '@/lib/dates'
+import { todayISO, addDaysISO } from '@/lib/dates'
 import RequestForm from './RequestForm'
 
 export default async function NewBookingPage({
@@ -12,12 +12,7 @@ export default async function NewBookingPage({
   const { error } = await searchParams
 
   const today = todayISO()
-  // v45: UTC arithmetic so tomorrow doesn't return today in BST.
-  const tomorrow = (() => {
-    const d = new Date(today + 'T00:00:00Z')
-    d.setUTCDate(d.getUTCDate() + 1)
-    return d.toISOString().slice(0, 10)
-  })()
+  const tomorrow = addDaysISO(today, 1)
 
   return (
     <div className="max-w-xl">

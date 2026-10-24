@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
+import { todayISO } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/server'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import AddGuestButton from './AddGuestButton'
@@ -36,7 +37,7 @@ export default async function GuestsIndexPage() {
   // For simplicity, we count direct guest_id matches first.
   let stayCounts: Record<string, { total: number; upcoming: number; lastStay: string | null }> = {}
   if (guestIds.length > 0) {
-    const todayISO = new Date().toISOString().slice(0, 10)
+    const today = todayISO()
     const { data: bookingRows } = await supabase
       .from('bookings')
       .select('guest_id, check_in, check_out, status')
@@ -49,8 +50,8 @@ export default async function GuestsIndexPage() {
         lastStay: null as string | null,
       }
       cur.total += 1
-      if (b.check_in >= todayISO) cur.upcoming += 1
-      if (b.check_in < todayISO && (!cur.lastStay || b.check_in > cur.lastStay)) {
+      if (b.check_in >= today) cur.upcoming += 1
+      if (b.check_in < today && (!cur.lastStay || b.check_in > cur.lastStay)) {
         cur.lastStay = b.check_in
       }
       stayCounts[b.guest_id] = cur
@@ -77,8 +78,8 @@ export default async function GuestsIndexPage() {
           lastStay: null as string | null,
         }
         cur.total += 1
-        if (r.check_in >= todayISO) cur.upcoming += 1
-        if (r.check_in < todayISO && (!cur.lastStay || r.check_in > cur.lastStay)) {
+        if (r.check_in >= today) cur.upcoming += 1
+        if (r.check_in < today && (!cur.lastStay || r.check_in > cur.lastStay)) {
           cur.lastStay = r.check_in
         }
         stayCounts[guest.id] = cur

@@ -16,7 +16,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { todayISO, formatDate, nightsBetween } from '@/lib/dates'
+import { todayISO, addDaysISO, formatDate, nightsBetween } from '@/lib/dates'
 import { floorLabelShort } from '@/lib/floors'
 import PrintButton from './PrintButton'
 
@@ -33,16 +33,10 @@ export default async function OverviewPage() {
   const today = todayISO()
   const days: string[] = []
   for (let i = 0; i < WINDOW_DAYS; i++) {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + i)
-    days.push(d.toISOString().split('T')[0])
+    days.push(addDaysISO(today, i))
   }
   const windowEnd = days[days.length - 1] // last day inclusive
-  const windowEndExclusive = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + WINDOW_DAYS)
-    return d.toISOString().split('T')[0]
-  })()
+  const windowEndExclusive = addDaysISO(today, WINDOW_DAYS)
 
   const supabase = await createClient()
 

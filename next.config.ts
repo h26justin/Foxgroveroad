@@ -13,12 +13,13 @@ const nextConfig: NextConfig = {
   // schedule (30s) which is fine for cross-tab freshness.
   experimental: {
     staleTimes: {
-      // 5 minutes for dynamic pages. Means re-visiting any tab within
-      // 5min serves the cached RSC payload without a server roundtrip.
-      // Mutations call revalidatePath which busts the server cache, so
-      // the user's own edits are reflected on the next nav regardless;
-      // cross-user changes can lag by up to staleTimes.dynamic.
-      dynamic: 300,
+      // 30s for dynamic pages. Re-visiting a tab within 30s serves the
+      // cached RSC payload without a server roundtrip. Mutations call
+      // revalidatePath, so the user's own edits show on the next nav
+      // regardless; other people's changes (approvals, new issues,
+      // calendar moves) can lag by up to staleTimes.dynamic. Was 300s,
+      // which made cross-user changes take up to 5 minutes to appear.
+      dynamic: 30,
       static: 600,
     },
   },

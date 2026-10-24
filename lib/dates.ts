@@ -1,16 +1,29 @@
 /**
  * Date helpers for the booking flow.
- * All dates are kept as YYYY-MM-DD strings (Postgres `date` type) — no
- * timezone shenanigans. Display formatting happens at render time.
+ * All dates are kept as YYYY-MM-DD strings (Postgres `date` type).
+ * "Today" is always the house's date (Europe/London) — Vercel runs in
+ * UTC, so a plain `new Date()` is yesterday between 00:00 and 01:00 BST.
+ * Day arithmetic is done in UTC on the date string, so it never shifts.
  */
 
-/** Today as YYYY-MM-DD (local) */
-export function todayISO(): string {
-  const d = new Date()
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+export const HOUSE_TIMEZONE = 'Europe/London'
+
+/** Today as YYYY-MM-DD in Europe/London (server or browser). */
+export function todayISO(now: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD.
+  return now.toLocaleDateString('en-CA', {
+    timeZone: HOUSE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+}
+
+/** YYYY-MM-DD shifted by `days` (may be negative). Timezone-proof. */
+export function addDaysISO(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 /** Number of nights between check-in and check-out (YYYY-MM-DD strings) */

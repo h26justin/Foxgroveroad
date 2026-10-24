@@ -1,21 +1,11 @@
 import { requireProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { todayISO } from '@/lib/dates'
+import { todayISO, addDaysISO } from '@/lib/dates'
 import { getAllRoomStatuses } from '@/lib/room-status'
 import HouseClient from './HouseClient'
 
 // 30s soft cache — same pattern as /housekeeping.
 export const revalidate = 30
-
-/** Add a number of days to a YYYY-MM-DD date.
- *  v45: UTC-only arithmetic so the result doesn't shift by ±1 day in
- *  timezones east of UTC (BST/CEST). The previous local-parse + UTC-
- *  format combination silently dropped a day. */
-function addDaysISO(iso: string, delta: number): string {
-  const d = new Date(iso + 'T00:00:00Z')
-  d.setUTCDate(d.getUTCDate() + delta)
-  return d.toISOString().slice(0, 10)
-}
 
 /** Calendar window is a rolling 31-day view starting at the given ISO
  *  date. Default anchor is today, so the user always sees what's

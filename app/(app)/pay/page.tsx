@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireProfile } from '@/lib/auth'
+import { todayISO } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/server'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import {
@@ -45,7 +46,7 @@ export default async function PayPage() {
 
   // v41: pull this week's self-logged hours so admin can see what
   // cleaners reported before typing the weekly totals.
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   const currentWeekMonday = mondayOfWeek(today)
   const selfLogged = await selfLoggedHoursForWeek(currentWeekMonday)
 

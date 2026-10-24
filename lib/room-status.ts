@@ -19,6 +19,8 @@
  *   - Same-day checkout + check-in → orange (the new booking wins)
  */
 
+import { addDaysISO } from '@/lib/dates'
+
 export type RoomStatus = 'green' | 'orange' | 'red'
 
 export type RoomStatusInfo = {
@@ -48,11 +50,7 @@ export async function getAllRoomStatuses(
   supabase: any,
   today: string,
 ): Promise<Map<string, RoomStatusInfo>> {
-  const stalenessFrom = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() - STALENESS_DAYS)
-    return d.toISOString().split('T')[0]
-  })()
+  const stalenessFrom = addDaysISO(today, -STALENESS_DAYS)
 
   const [roomsRes, bookingsRes, templatesRes, completionsRes] =
     await Promise.all([

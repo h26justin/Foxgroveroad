@@ -1,4 +1,5 @@
 import { requireProfile } from '@/lib/auth'
+import { todayISO, addDaysISO } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/server'
 import { getFeatureFlags } from '@/lib/feature-flags'
 import { getAllRoomStatuses } from '@/lib/room-status'
@@ -34,13 +35,9 @@ export default async function HousekeepingPage({
     createClient(),
   ])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
   // 5-day window for pre-arrival prep
-  const fiveDaysOut = (() => {
-    const d = new Date(today + 'T00:00:00')
-    d.setDate(d.getDate() + 5)
-    return d.toISOString().split('T')[0]
-  })()
+  const fiveDaysOut = addDaysISO(today, 5)
 
   // Seven queries fire in parallel.
   //
@@ -108,11 +105,7 @@ export default async function HousekeepingPage({
     // completions (template_id + completed_at_date) and reduce to a
     // map client-side. Limited to past 365 days to keep size bounded.
     (() => {
-      const yearAgo = (() => {
-        const d = new Date(today + 'T00:00:00')
-        d.setDate(d.getDate() - 365)
-        return d.toISOString().split('T')[0]
-      })()
+      const yearAgo = addDaysISO(today, -365)
       return supabase
         .from('task_completions')
         .select('task_template_id, completed_at_date')
@@ -126,11 +119,7 @@ export default async function HousekeepingPage({
       .select('id, name, location, frequency_days, notes, position')
       .order('position'),
     (() => {
-      const sixtyDaysAgo = (() => {
-        const d = new Date(today + 'T00:00:00')
-        d.setDate(d.getDate() - 60)
-        return d.toISOString().split('T')[0]
-      })()
+      const sixtyDaysAgo = addDaysISO(today, -60)
       return supabase
         .from('plant_waterings')
         .select('id, plant_id, watered_by, watered_at, watered_at_date')
